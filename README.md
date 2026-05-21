@@ -51,6 +51,7 @@ curl -X POST -F "file=@mymodel.genmodel" http://localhost:8090/api/genmodel/insp
 ```
 
 Response:
+
 ```json
 {
   "status": "success",
@@ -75,6 +76,7 @@ curl -X POST -F "file=@mymodel.genmodel" http://localhost:8090/api/genmodel/proc
 ```
 
 Response:
+
 ```json
 {
   "status": "success",
@@ -93,19 +95,19 @@ Response:
 The service automatically applies these normalization rules:
 
 1. **Removes deprecated attributes:**
-   - `complianceLevel`, `compliance`, `editDirectory`, `editorDirectory`, etc.
+    - `complianceLevel`, `compliance`, `editDirectory`, `editorDirectory`, etc.
 
 2. **Ensures correct basePackage:**
-   - Sets basePackage to match modelPluginID for all GenPackages
+    - Sets basePackage to match modelPluginID for all GenPackages
 
 3. **Standardizes modelDirectory:**
-   - Format: `/{modelPluginID}/target/generated-sources/ecore`
+    - Format: `/{modelPluginID}/target/generated-sources/ecore`
 
 4. **Enforces creationIcons:**
-   - Sets to `false`
+    - Sets to `false`
 
 5. **Ensures foreignModel reference:**
-   - Adds missing foreignModel entry automatically
+    - Adds missing foreignModel entry automatically
 
 ## Project Structure
 
@@ -129,6 +131,7 @@ curl http://localhost:8090/actuator/health
 See `src/main/resources/application.properties` for available configurations.
 
 Default settings:
+
 - Port: `8090`
 - Application Name: `methodologist-setup-service`
 
@@ -147,6 +150,7 @@ For detailed API documentation, see [API_DOCUMENTATION.md](API_DOCUMENTATION.md)
 ## Error Handling
 
 All requests return appropriate HTTP status codes:
+
 - `200 OK`: Successful operation
 - `400 Bad Request`: Invalid input or processing error
 - `500 Internal Server Error`: Unexpected server error

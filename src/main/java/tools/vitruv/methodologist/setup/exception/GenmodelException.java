@@ -1,8 +1,6 @@
 package tools.vitruv.methodologist.setup.exception;
 
-/**
- * Exception thrown when a GenModel file is invalid or not found.
- */
+/** Exception thrown when a GenModel file is invalid or not found. */
 public class GenmodelException extends MethodologistSetupException {
 
   private static final long serialVersionUID = 1L;
@@ -28,4 +26,3 @@ public class GenmodelException extends MethodologistSetupException {
     super(errorCode, message, cause);
   }
 }
-

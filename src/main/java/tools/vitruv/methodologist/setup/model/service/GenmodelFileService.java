@@ -10,9 +10,7 @@ import org.springframework.web.multipart.MultipartFile;
 import tools.vitruv.methodologist.setup.exception.GenmodelException;
 import tools.vitruv.methodologist.setup.messages.ErrorMessages;
 
-/**
- * Service for handling GenModel file operations including upload, processing, and download.
- */
+/** Service for handling GenModel file operations including upload, processing, and download. */
 @Slf4j
 @Service
 public class GenmodelFileService {
@@ -75,8 +73,7 @@ public class GenmodelFileService {
       return file.getBytes();
     } catch (IOException e) {
       log.error("Failed to read multipart file bytes", e);
-      throw new GenmodelException(
-          "FILE_READ_ERROR", ErrorMessages.MULTIPART_FILE_UPLOAD_ERROR, e);
+      throw new GenmodelException("FILE_READ_ERROR", ErrorMessages.MULTIPART_FILE_UPLOAD_ERROR, e);
     }
   }
 
@@ -140,4 +137,3 @@ public class GenmodelFileService {
     return content.getBytes(StandardCharsets.UTF_8);
   }
 }
-

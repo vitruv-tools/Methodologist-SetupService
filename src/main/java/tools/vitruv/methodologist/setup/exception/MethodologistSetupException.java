@@ -1,8 +1,6 @@
 package tools.vitruv.methodologist.setup.exception;
 
-/**
- * Base exception for Methodologist Setup Service.
- */
+/** Base exception for Methodologist Setup Service. */
 public class MethodologistSetupException extends RuntimeException {
 
   private static final long serialVersionUID = 1L;
@@ -40,4 +38,3 @@ public class MethodologistSetupException extends RuntimeException {
     return errorCode;
   }
 }
-

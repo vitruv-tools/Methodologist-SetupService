@@ -4,9 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * Data transfer object representing a GenModel validation issue.
- */
+/** Data transfer object representing a GenModel validation issue. */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -14,4 +12,3 @@ public class GenmodelIssueDTO {
   private String filename;
   private String message;
 }
-

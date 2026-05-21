@@ -6,9 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * Error response DTO for API error responses.
- */
+/** Error response DTO for API error responses. */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -21,4 +19,3 @@ public class ErrorResponseDTO {
   private Integer status;
   private Long timestamp;
 }
-

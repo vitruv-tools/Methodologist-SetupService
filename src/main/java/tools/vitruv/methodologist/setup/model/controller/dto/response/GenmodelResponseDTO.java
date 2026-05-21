@@ -6,9 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import tools.vitruv.methodologist.setup.model.controller.dto.request.GenmodelIssueDTO;
 
-/**
- * Data transfer object for GenModel validation response.
- */
+/** Data transfer object for GenModel validation response. */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -17,4 +15,3 @@ public class GenmodelResponseDTO {
   private String message;
   private List<GenmodelIssueDTO> issues;
 }
-
