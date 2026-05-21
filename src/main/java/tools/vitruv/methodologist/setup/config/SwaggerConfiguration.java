@@ -7,9 +7,7 @@ import io.swagger.v3.oas.models.info.License;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/**
- * Swagger/OpenAPI configuration for API documentation.
- */
+/** Swagger/OpenAPI configuration for API documentation. */
 @Configuration
 public class SwaggerConfiguration {
 
@@ -28,11 +26,7 @@ public class SwaggerConfiguration {
                 .description(
                     "REST API for validating and standardizing GenModel files "
                         + "for MWE2 workflow compatibility")
-                .contact(
-                    new Contact()
-                        .name("Methodologist Team")
-                        .email("info@methodologist.tools"))
+                .contact(new Contact().name("Methodologist Team").email("info@methodologist.tools"))
                 .license(new License().name("Apache 2.0")));
   }
 }
-

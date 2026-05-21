@@ -26,6 +26,7 @@ import org.eclipse.emf.codegen.ecore.genmodel.GenModel;
 import org.eclipse.emf.codegen.ecore.genmodel.GenModelPackage;
 import org.eclipse.emf.codegen.ecore.genmodel.GenPackage;
 import org.eclipse.emf.common.util.URI;
+import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
@@ -35,55 +36,10 @@ import tools.vitruv.methodologist.setup.exception.GenmodelException;
 import tools.vitruv.methodologist.setup.messages.ErrorMessages;
 import tools.vitruv.methodologist.setup.messages.InfoMessages;
 
-/**
- * Service for validating and standardizing GenModel files for MWE2 workflow compatibility.
- */
+/** Service for validating and standardizing GenModel files for MWE2 workflow compatibility. */
 @Slf4j
 @Service
 public class GenmodelPrecheckService {
-
-  /**
-   * Represents a validation issue found in a GenModel file.
-   */
-  public static final class GenmodelIssue {
-    public final String filename;
-    public final String message;
-
-    /**
-     * Creates a new GenModel issue.
-     *
-     * @param filename the filename of the genmodel file
-     * @param message the issue message
-     */
-    public GenmodelIssue(String filename, String message) {
-      this.filename = filename;
-      this.message = message;
-    }
-
-    @Override
-    public String toString() {
-      return filename + ": " + message;
-    }
-  }
-
-  /**
-   * Represents the result of GenModel processing including issues and processed content.
-   */
-  public static final class ProcessResult {
-    public final List<GenmodelIssue> issues;
-    public final byte[] processedContent;
-
-    /**
-     * Creates a new process result.
-     *
-     * @param issues the list of detected issues
-     * @param processedContent the processed file content as bytes
-     */
-    public ProcessResult(List<GenmodelIssue> issues, byte[] processedContent) {
-      this.issues = issues;
-      this.processedContent = processedContent;
-    }
-  }
 
   private static final Set<String> ATTRS_TO_REMOVE =
       Set.of(
@@ -229,7 +185,8 @@ public class GenmodelPrecheckService {
       log.error("Failed to strip attributes from genmodel XML", e);
       throw new GenmodelException(
           "ATTRIBUTE_STRIP_ERROR",
-          String.format(ErrorMessages.GENMODEL_ATTRIBUTE_STRIP_ERROR, genmodelFile.getAbsolutePath()),
+          String.format(
+              ErrorMessages.GENMODEL_ATTRIBUTE_STRIP_ERROR, genmodelFile.getAbsolutePath()),
           e);
     }
   }
@@ -249,9 +206,7 @@ public class GenmodelPrecheckService {
     if (!foundAttrs.isEmpty()) {
       String message =
           String.format(
-              applyChanges
-                  ? InfoMessages.ATTRIBUTES_REMOVED
-                  : InfoMessages.ATTRIBUTES_WOULD_REMOVE,
+              applyChanges ? InfoMessages.ATTRIBUTES_REMOVED : InfoMessages.ATTRIBUTES_WOULD_REMOVE,
               String.join(", ", foundAttrs));
       issues.add(new GenmodelIssue(genmodelFile.getName(), message));
     }
@@ -309,8 +264,7 @@ public class GenmodelPrecheckService {
       log.error("GenModel has missing modelPluginID: {}", genmodelFile.getAbsolutePath());
       throw new GenmodelException(
           "MISSING_PLUGIN_ID",
-          String.format(
-              ErrorMessages.GENMODEL_MISSING_PLUGIN_ID, genmodelFile.getAbsolutePath()));
+          String.format(ErrorMessages.GENMODEL_MISSING_PLUGIN_ID, genmodelFile.getAbsolutePath()));
     }
     return modelPluginId;
   }
@@ -321,7 +275,8 @@ public class GenmodelPrecheckService {
       String modelPluginId,
       List<GenmodelIssue> issues,
       boolean applyChanges) {
-    enforceBasePackageEqualsModelPluginId(genmodelFile, genModel, modelPluginId, issues, applyChanges);
+    enforceBasePackageEqualsModelPluginId(
+        genmodelFile, genModel, modelPluginId, issues, applyChanges);
     enforceModelDirectory(genmodelFile, genModel, modelPluginId, issues, applyChanges);
     enforceForeignModel(genmodelFile, genModel, issues, applyChanges);
     enforceCreationIcons(genmodelFile, genModel, issues, applyChanges);
@@ -386,7 +341,8 @@ public class GenmodelPrecheckService {
         Iterator<Namespace> namespaces = startElement.getNamespaces();
 
         StartElement rebuilt =
-            eventFactory.createStartElement(startElement.getName(), keptAttrs.iterator(), namespaces);
+            eventFactory.createStartElement(
+                startElement.getName(), keptAttrs.iterator(), namespaces);
         writer.add(rebuilt);
       } else {
         writer.add(xmlEvent);
@@ -411,8 +367,7 @@ public class GenmodelPrecheckService {
     if (genModel.isCreationIcons()) {
       if (applyChanges) {
         genModel.setCreationIcons(false);
-        issues.add(
-            new GenmodelIssue(genmodelFile.getName(), InfoMessages.CREATION_ICONS_SET));
+        issues.add(new GenmodelIssue(genmodelFile.getName(), InfoMessages.CREATION_ICONS_SET));
       } else {
         issues.add(
             new GenmodelIssue(genmodelFile.getName(), InfoMessages.CREATION_ICONS_WOULD_SET));
@@ -529,8 +484,7 @@ public class GenmodelPrecheckService {
         genModel.setModelDirectory(expected);
         issues.add(
             new GenmodelIssue(
-                genmodelFile.getName(),
-                String.format(InfoMessages.MODEL_DIRECTORY_SET, expected)));
+                genmodelFile.getName(), String.format(InfoMessages.MODEL_DIRECTORY_SET, expected)));
       } else {
         issues.add(
             new GenmodelIssue(
@@ -580,9 +534,17 @@ public class GenmodelPrecheckService {
    */
   public ResourceSet createResourceSet() {
     ResourceSet resourceSet = new ResourceSetImpl();
+    resourceSet.getPackageRegistry().put(GenModelPackage.eNS_URI, GenModelPackage.eINSTANCE);
     resourceSet
         .getPackageRegistry()
-        .put(GenModelPackage.eNS_URI, GenModelPackage.eINSTANCE);
+        .put("http://www.eclipse.emf/2002/GenModel", GenModelPackage.eINSTANCE);
+
+    EPackage.Registry.INSTANCE.put(GenModelPackage.eNS_URI, GenModelPackage.eINSTANCE);
+    EPackage.Registry.INSTANCE.put(
+        "http://www.eclipse.emf/2002/GenModel", GenModelPackage.eINSTANCE);
+    EPackage.Registry.INSTANCE.put(
+        "http://www.eclipse.org/emf/2002/GenModel", GenModelPackage.eINSTANCE);
+
     resourceSet
         .getResourceFactoryRegistry()
         .getExtensionToFactoryMap()
@@ -608,8 +570,7 @@ public class GenmodelPrecheckService {
         resource.load(null);
       } else {
         resource = resourceSet.createResource(uri);
-        resource.load(
-            new ByteArrayInputStream(xmlOverride.getBytes(StandardCharsets.UTF_8)), null);
+        resource.load(new ByteArrayInputStream(xmlOverride.getBytes(StandardCharsets.UTF_8)), null);
       }
       return resource;
     } catch (IOException e) {
@@ -620,5 +581,43 @@ public class GenmodelPrecheckService {
           e);
     }
   }
-}
 
+  /** Represents a validation issue found in a GenModel file. */
+  public static final class GenmodelIssue {
+    public final String filename;
+    public final String message;
+
+    /**
+     * Creates a new GenModel issue.
+     *
+     * @param filename the filename of the genmodel file
+     * @param message the issue message
+     */
+    public GenmodelIssue(String filename, String message) {
+      this.filename = filename;
+      this.message = message;
+    }
+
+    @Override
+    public String toString() {
+      return filename + ": " + message;
+    }
+  }
+
+  /** Represents the result of GenModel processing including issues and processed content. */
+  public static final class ProcessResult {
+    public final List<GenmodelIssue> issues;
+    public final byte[] processedContent;
+
+    /**
+     * Creates a new process result.
+     *
+     * @param issues the list of detected issues
+     * @param processedContent the processed file content as bytes
+     */
+    public ProcessResult(List<GenmodelIssue> issues, byte[] processedContent) {
+      this.issues = issues;
+      this.processedContent = processedContent;
+    }
+  }
+}

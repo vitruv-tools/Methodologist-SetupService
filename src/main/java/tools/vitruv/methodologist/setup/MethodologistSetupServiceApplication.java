@@ -6,8 +6,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class MethodologistSetupServiceApplication {
 
-	public static void main(String[] args) {
-		SpringApplication.run(MethodologistSetupServiceApplication.class, args);
-	}
-
+  public static void main(String[] args) {
+    SpringApplication.run(MethodologistSetupServiceApplication.class, args);
+  }
 }

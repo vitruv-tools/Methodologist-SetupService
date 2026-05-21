@@ -34,4 +34,3 @@ public class ResponseTemplateDto<T> {
     this.timestamp = System.currentTimeMillis();
   }
 }
-
