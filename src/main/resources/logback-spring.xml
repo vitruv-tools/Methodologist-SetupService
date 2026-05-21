@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<configuration>
+    <springProperty scope="local" name="path" source="logging.path" defaultValue="./log"/>
+    <springProperty scope="local" name="rollingFileNamePattern"
+                    source="logging.pattern.rolling-file-name" defaultValue="%d{yyyy-MM-dd}.%i.log"/>
+    <springProperty scope="local" name="maxSize" source="logging.file.max-size" defaultValue="5MB"/>
+    <springProperty scope="local" name="maxHistory" source="logging.file.max-history" defaultValue="100"/>
+    <springProperty scope="local" name="cleanHistoryOnStart"
+                    source="logging.file.clean-history-on-start" defaultValue="false"/>
+
+    <appender name="INFO" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${path}/info.log</file>
+        <layout class="net.logstash.logback.layout.LogstashLayout"/>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <fieldNames>
+                <timestamp>ts</timestamp>
+                <message>msg</message>
+                <thread>[ignore]</thread>
+                <levelValue>[ignore]</levelValue>
+                <logger>logger</logger>
+                <version>[ignore]</version>
+            </fieldNames>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${path}/info-${rollingFileNamePattern}</fileNamePattern>
+            <maxFileSize>${maxSize}</maxFileSize>
+            <maxHistory>${maxHistory}</maxHistory>
+            <cleanHistoryOnStart>${cleanHistoryOnStart}</cleanHistoryOnStart>
+        </rollingPolicy>
+    </appender>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <fieldNames>
+                <timestamp>ts</timestamp>
+                <message>msg</message>
+                <thread>[ignore]</thread>
+                <levelValue>[ignore]</levelValue>
+                <logger>logger</logger>
+                <version>[ignore]</version>
+            </fieldNames>
+        </encoder>
+    </appender>
+    <appender name="ERROR" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${path}/error.log</file>
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>ERROR</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+        <layout class="net.logstash.logback.layout.LogstashLayout"/>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <fieldNames>
+                <timestamp>ts</timestamp>
+                <message>msg</message>
+                <thread>[ignore]</thread>
+                <levelValue>[ignore]</levelValue>
+                <logger>logger</logger>
+                <version>[ignore]</version>
+            </fieldNames>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${path}/error-${rollingFileNamePattern}</fileNamePattern>
+            <maxFileSize>${maxSize}</maxFileSize>
+            <maxHistory>${maxHistory}</maxHistory>
+            <cleanHistoryOnStart>${cleanHistoryOnStart}</cleanHistoryOnStart>
+        </rollingPolicy>
+    </appender>
+
+    <root level="ERROR">
+        <appender-ref ref="ERROR"/>
+    </root>
+
+    <root level="INFO">
+        <appender-ref ref="INFO"/>
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>
+

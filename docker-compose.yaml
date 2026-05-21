@@ -1,0 +1,14 @@
+services:
+  methodologist-setup-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: methodologist-setup-service:latest
+    ports:
+      - "8090:8090"
+    environment:
+      JAVA_TOOL_OPTIONS: >-
+        -XX:+UseContainerSupport
+        -XX:MaxRAMPercentage=75.0
+        -XX:InitialRAMPercentage=25.0
+    restart: unless-stopped
