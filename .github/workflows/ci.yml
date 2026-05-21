@@ -1,0 +1,97 @@
+name: CI
+
+# workflow triggers
+on:
+  # manually
+  workflow_dispatch:
+  # PRs on `main`
+  pull_request:
+    branches:
+      - main
+      - develop
+  # nightly
+  schedule:
+    - cron: "0 3 * * *"
+
+
+jobs:
+  verify:
+    name: Verify build on ubuntu-latest
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5.0.0
+
+      - name: Setup Java and Maven cache
+        uses: actions/setup-java@v4.7.1
+        with:
+          distribution: 'temurin'
+          java-version: '25'
+          check-latest: true
+          cache: 'maven'
+
+      - name: Verify build
+        run: >
+          ./mvnw clean verify
+          --batch-mode
+          --update-snapshots
+          --no-transfer-progress
+          
+      - name: Stage build results (Unix)
+        run: mkdir staging-ubuntu-latest && find . -path '*/target/*.jar' -exec cp {} staging-ubuntu-latest/ \;
+
+      - name: Upload build results
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-results-ubuntu-latest
+          path: staging-ubuntu-latest
+
+  sonar:
+    name: SonarQube analysis
+    runs-on: ubuntu-latest
+    needs: [verify]
+    if: github.event_name == 'schedule' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
+    strategy:
+      fail-fast: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5.0.0
+
+      - name: Setup Java and Maven cache
+        uses: actions/setup-java@v4.7.1
+        with:
+          distribution: 'temurin'
+          java-version: '25'
+          check-latest: true
+          cache: 'maven'
+
+      - name: Run SonarQube analysis
+        run: >
+          ./mvnw clean verify sonar:sonar -P coverage
+          --batch-mode
+          --update-snapshots
+          --no-transfer-progress
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  run-checkstyle:
+    name: checkstyle check
+    runs-on: ubuntu-latest
+    needs: [ verify ]
+    if: (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
+    strategy:
+      fail-fast: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+      - name: Run checkstyle
+        uses: dbelyaev/action-checkstyle@v2.0.0
+        with:
+          github_token: ${{ secrets.github_token }}
+          reporter: github-pr-review
+          checkstyle_config: checkstyle.xml
+          checkstyle_version: "10.21.4"
