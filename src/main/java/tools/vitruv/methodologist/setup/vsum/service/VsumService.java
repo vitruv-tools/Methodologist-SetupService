@@ -43,7 +43,9 @@ public class VsumService {
    * @throws MissingModelException when the model configuration is invalid
    */
   public byte[] generateProjectArchive(
-      List<ModelFiles> modelFiles, List<File> reactionFiles, Map<String, String> metamodelNamespaceMap)
+      List<ModelFiles> modelFiles,
+      List<File> reactionFiles,
+      Map<String, String> metamodelNamespaceMap)
       throws IOException, InterruptedException, MissingModelException {
     validateInputs(modelFiles, reactionFiles);
 
@@ -217,17 +219,15 @@ public class VsumService {
 
     StringWriter output = new StringWriter();
     try (BufferedReader reader =
-        new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+        new BufferedReader(
+            new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
       reader.transferTo(output);
     }
 
     process.waitFor();
     if (process.exitValue() != 0) {
       throw new IOException(
-          "Maven build failed with exit code "
-              + process.exitValue()
-              + ". Output: "
-              + output);
+          "Maven build failed with exit code " + process.exitValue() + ". Output: " + output);
     }
   }
 

@@ -46,7 +46,8 @@ public class GenerateFromTemplate {
       fileWriter.flush();
       log.info("writing to " + filePath.getAbsolutePath());
     } catch (TemplateException e) {
-      throw new IOException("Failed to process template for file: " + filePath.getAbsolutePath(), e);
+      throw new IOException(
+          "Failed to process template for file: " + filePath.getAbsolutePath(), e);
     }
   }
 

@@ -117,8 +117,7 @@ class GenerateFromTemplateTest {
     void rejectsNullPackageName() {
       File target = tempDir.resolve("pom.xml").toFile();
 
-      assertThrows(
-          MissingModelException.class, () -> generator.generateRootPom(target, null));
+      assertThrows(MissingModelException.class, () -> generator.generateRootPom(target, null));
     }
 
     /** Verifies an empty package name is rejected with a {@link MissingModelException}. */

@@ -22,17 +22,22 @@ public class VitruvConfiguration {
 
   /** -- GETTER -- Returns the model names. */
   @Getter private final List<String> modelNames = new ArrayList<>();
+
   private final List<MetamodelLocation> metamodelLocations = new ArrayList<>();
+
   /** -- GETTER -- Returns the reaction file locations used by the CLI. */
   @Getter private final List<Path> reactionLocations = new ArrayList<>();
+
   /**
    * -- SETTER -- Sets the local path of the configuration.
    *
    * <p>-- GETTER -- Returns the local path of the configuration.
    */
   @Getter @Setter private Path localPath;
+
   /** -- GETTER -- Returns the package name. */
   @Getter private String packageName;
+
   /**
    * -- SETTER -- Sets the workflow of the configuration.
    *

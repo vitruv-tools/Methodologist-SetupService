@@ -57,7 +57,8 @@ public class VsumProjectBuildService {
       List<File> copiedReactionFiles = toReactionFiles(uploadWorkspace, reactionFiles);
       normalizeReactionImports(modelPairs, copiedReactionFiles);
       Map<String, String> metamodelNamespaceMap = extractMetamodelNamespaceMap(modelPairs);
-      return vsumService.generateProjectArchive(modelPairs, copiedReactionFiles, metamodelNamespaceMap);
+      return vsumService.generateProjectArchive(
+          modelPairs, copiedReactionFiles, metamodelNamespaceMap);
     } catch (IOException | MissingModelException e) {
       throw new MethodologistSetupException(
           VSUM_BUILD_ERROR_CODE, "Failed to build VSUM project archive", e);
@@ -76,7 +77,8 @@ public class VsumProjectBuildService {
    * @param metamodelFiles metamodel files
    * @param genmodelFiles genmodel files
    */
-  private void validateInputs(List<MultipartFile> metamodelFiles, List<MultipartFile> genmodelFiles) {
+  private void validateInputs(
+      List<MultipartFile> metamodelFiles, List<MultipartFile> genmodelFiles) {
     if (metamodelFiles == null
         || genmodelFiles == null
         || metamodelFiles.isEmpty()
@@ -115,8 +117,10 @@ public class VsumProjectBuildService {
     List<VsumService.ModelFiles> modelPairs = new ArrayList<>();
 
     for (int index = 0; index < metamodelFiles.size(); index++) {
-      File metamodel = writeMultipartFile(metamodelFiles.get(index), modelUploadPath, "metamodel", index);
-      File genmodel = writeMultipartFile(genmodelFiles.get(index), modelUploadPath, "genmodel", index);
+      File metamodel =
+          writeMultipartFile(metamodelFiles.get(index), modelUploadPath, "metamodel", index);
+      File genmodel =
+          writeMultipartFile(genmodelFiles.get(index), modelUploadPath, "genmodel", index);
       modelPairs.add(new VsumService.ModelFiles(metamodel, genmodel));
     }
 
@@ -131,7 +135,8 @@ public class VsumProjectBuildService {
    * @return copied reaction files
    * @throws IOException when writing files fails
    */
-  private List<File> toReactionFiles(Path root, List<MultipartFile> reactionFiles) throws IOException {
+  private List<File> toReactionFiles(Path root, List<MultipartFile> reactionFiles)
+      throws IOException {
     if (reactionFiles == null || reactionFiles.isEmpty()) {
       return List.of();
     }
@@ -152,8 +157,8 @@ public class VsumProjectBuildService {
    * @param modelPairs metamodel/genmodel file pairs
    * @param reactionFiles copied reaction files
    */
-  private void normalizeReactionImports(List<VsumService.ModelFiles> modelPairs, List<File> reactionFiles)
-      throws IOException {
+  private void normalizeReactionImports(
+      List<VsumService.ModelFiles> modelPairs, List<File> reactionFiles) throws IOException {
     if (reactionFiles == null || reactionFiles.isEmpty()) {
       return;
     }
@@ -190,9 +195,7 @@ public class VsumProjectBuildService {
     for (VsumService.ModelFiles pair : modelPairs) {
       MetamodelInfo info = readMetamodelInfo(pair.metamodelFile());
       if (info != null && info.nsUri != null && !info.nsUri.isBlank()) {
-        modelNameToNsUri.put(
-            info.packageName != null ? info.packageName : "model",
-            info.nsUri);
+        modelNameToNsUri.put(info.packageName != null ? info.packageName : "model", info.nsUri);
       }
     }
     return modelNameToNsUri;
@@ -213,7 +216,8 @@ public class VsumProjectBuildService {
         }
       }
 
-      matcher.appendReplacement(rewritten, "import \"" + Matcher.quoteReplacement(replacementUri) + "\"");
+      matcher.appendReplacement(
+          rewritten, "import \"" + Matcher.quoteReplacement(replacementUri) + "\"");
     }
     matcher.appendTail(rewritten);
     return rewritten.toString();
@@ -317,4 +321,3 @@ public class VsumProjectBuildService {
     }
   }
 }
-

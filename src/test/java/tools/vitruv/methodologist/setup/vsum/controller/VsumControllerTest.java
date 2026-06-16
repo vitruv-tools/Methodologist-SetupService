@@ -43,7 +43,8 @@ class VsumControllerTest {
             "genmodelFiles", "model.genmodel", "application/octet-stream", "gen".getBytes());
 
     byte[] result =
-        vsumProjectBuildService.buildProjectArchive(List.of(metamodel), List.of(genmodel), List.of());
+        vsumProjectBuildService.buildProjectArchive(
+            List.of(metamodel), List.of(genmodel), List.of());
 
     assertArrayEquals(archive, result);
     verify(vsumService).generateProjectArchive(anyList(), anyList(), any());
@@ -93,7 +94,8 @@ class VsumControllerTest {
         new MockMultipartFile(
             "genmodelFiles", "model.genmodel", "application/xml", "genmodel".getBytes());
     MockMultipartFile reactionFile =
-        new MockMultipartFile("reactionFiles", "rules.reactions", "text/plain", reaction.getBytes());
+        new MockMultipartFile(
+            "reactionFiles", "rules.reactions", "text/plain", reaction.getBytes());
 
     vsumProjectBuildService.buildProjectArchive(
         List.of(metamodel), List.of(genmodel), List.of(reactionFile));
@@ -101,4 +103,3 @@ class VsumControllerTest {
     verify(vsumService).generateProjectArchive(anyList(), anyList(), any());
   }
 }
-
