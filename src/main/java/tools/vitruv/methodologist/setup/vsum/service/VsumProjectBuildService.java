@@ -156,6 +156,7 @@ public class VsumProjectBuildService {
    *
    * @param modelPairs metamodel/genmodel file pairs
    * @param reactionFiles copied reaction files
+   * @throws IOException when reading or rewriting a reaction file fails
    */
   private void normalizeReactionImports(
       List<VsumService.ModelFiles> modelPairs, List<File> reactionFiles) throws IOException {
@@ -201,6 +202,16 @@ public class VsumProjectBuildService {
     return modelNameToNsUri;
   }
 
+  /**
+   * Rewrites each {@code import "..."} statement in a single reaction file's content, replacing
+   * imports that do not match a known nsURI with the nsURI mapped from the import's last path
+   * segment.
+   *
+   * @param content the reaction file content to rewrite
+   * @param packageNameToNsUri map of metamodel package names to their nsURIs
+   * @param knownNsUris the set of nsURIs that are already valid and should be left unchanged
+   * @return the rewritten content, identical to the input when no import required replacement
+   */
   private String normalizeReactionImports(
       String content, Map<String, String> packageNameToNsUri, Set<String> knownNsUris) {
     Matcher matcher = REACTION_IMPORT_PATTERN.matcher(content);
@@ -223,6 +234,13 @@ public class VsumProjectBuildService {
     return rewritten.toString();
   }
 
+  /**
+   * Extracts the last segment of a URI, i.e. the substring following the final {@code /} or {@code
+   * #}.
+   *
+   * @param uri the URI to inspect
+   * @return the substring after the last separator, or the whole URI when no separator is present
+   */
   private String extractLastSegment(String uri) {
     int slash = uri.lastIndexOf('/');
     int hash = uri.lastIndexOf('#');
@@ -230,6 +248,14 @@ public class VsumProjectBuildService {
     return separator >= 0 ? uri.substring(separator + 1) : uri;
   }
 
+  /**
+   * Parses an ecore metamodel file and extracts the root element's {@code name} and {@code nsURI}
+   * attributes.
+   *
+   * @param metamodelFile the metamodel (ecore) file to parse
+   * @return the extracted metamodel info, or {@code null} when the file cannot be parsed or its
+   *     nsURI is missing or blank
+   */
   private MetamodelInfo readMetamodelInfo(File metamodelFile) {
     try {
       DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -311,10 +337,17 @@ public class VsumProjectBuildService {
     }
   }
 
+  /** Immutable holder for a metamodel's package name and nsURI. */
   private static class MetamodelInfo {
     private final String packageName;
     private final String nsUri;
 
+    /**
+     * Creates a holder for the given metamodel attributes.
+     *
+     * @param packageName the metamodel's package name (root element {@code name} attribute)
+     * @param nsUri the metamodel's namespace URI (root element {@code nsURI} attribute)
+     */
     private MetamodelInfo(String packageName, String nsUri) {
       this.packageName = packageName;
       this.nsUri = nsUri;
