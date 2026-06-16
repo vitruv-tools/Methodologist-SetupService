@@ -21,10 +21,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
+import lombok.extern.slf4j.Slf4j;
 import tools.vitruv.methodologist.setup.exception.MethodologistSetupException;
 import tools.vitruv.methodologist.setup.exception.MissingModelException;
 
 /** Coordinates VSUM project build operations from uploaded files. */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class VsumProjectBuildService {
@@ -321,7 +323,8 @@ public class VsumProjectBuildService {
 
     try (Stream<Path> paths = Files.walk(root)) {
       paths.sorted(Comparator.reverseOrder()).forEach(this::deleteQuietly);
-    } catch (IOException ignored) {
+    } catch (IOException e) {
+      log.error(e.getMessage());
     }
   }
 
@@ -333,7 +336,8 @@ public class VsumProjectBuildService {
   private void deleteQuietly(Path path) {
     try {
       Files.deleteIfExists(path);
-    } catch (IOException ignored) {
+    } catch (IOException e) {
+      log.error(e.getMessage());
     }
   }
 

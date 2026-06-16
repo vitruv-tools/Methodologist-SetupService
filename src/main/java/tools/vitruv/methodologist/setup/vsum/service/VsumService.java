@@ -21,10 +21,12 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import lombok.extern.slf4j.Slf4j;
 import tools.vitruv.methodologist.setup.config.VitruvConfiguration;
 import tools.vitruv.methodologist.setup.exception.MissingModelException;
 
 /** Business service for building and packaging VSUM projects from uploaded model files. */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class VsumService {
@@ -382,11 +384,11 @@ public class VsumService {
                 try {
                   Files.deleteIfExists(path);
                 } catch (IOException e) {
-                  // Best-effort cleanup; ignore delete failures.
+                  log.error(e.getMessage());
                 }
               });
     } catch (IOException e) {
-      // Best-effort cleanup; ignore cleanup failures.
+      log.error(e.getMessage());
     }
   }
 
