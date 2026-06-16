@@ -20,8 +20,8 @@ import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 import tools.vitruv.methodologist.setup.config.VitruvConfiguration;
 import tools.vitruv.methodologist.setup.exception.MissingModelException;
 

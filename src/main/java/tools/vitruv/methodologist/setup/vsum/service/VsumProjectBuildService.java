@@ -17,11 +17,11 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import javax.xml.parsers.DocumentBuilderFactory;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
-import lombok.extern.slf4j.Slf4j;
 import tools.vitruv.methodologist.setup.exception.MethodologistSetupException;
 import tools.vitruv.methodologist.setup.exception.MissingModelException;
 
