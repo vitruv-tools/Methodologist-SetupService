@@ -113,6 +113,15 @@ public final class FileUtils {
     return folderPath;
   }
 
+  /**
+   * Finds the value of an option in the given file by scanning for the first line that starts with
+   * the option prefix and returning the trimmed remainder of that line.
+   *
+   * @param file The file to search.
+   * @param option The option prefix to look for at the start of a line.
+   * @return The trimmed value following the option prefix.
+   * @throws IllegalArgumentException when no line starting with the option is found.
+   */
   public static String findOption(File file, String option) {
     try {
       for (String line : Files.readAllLines(file.toPath())) {

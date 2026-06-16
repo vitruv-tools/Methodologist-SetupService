@@ -42,7 +42,9 @@ public class VsumController {
   @Operation(
       summary = "Build VSUM project",
       description =
-          "Uploads metamodel/genmodel files, builds the project from templates, and returns a zip archive",
+          "Uploads metamodel/genmodel files,"
+              + " builds the project from templates,"
+              + " and returns a zip archive",
       responses = {
         @ApiResponse(
             responseCode = "200",

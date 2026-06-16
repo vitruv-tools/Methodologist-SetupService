@@ -1,6 +1,7 @@
 package tools.vitruv.methodologist.setup.emf;
 
 import java.io.File;
+import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
@@ -39,7 +40,6 @@ public class EMFModelInitializer {
     try (JarFile jar = new JarFile(jarFile)) {
       Collection<JarEntry> entries = jar.stream().toList();
 
-      // Look for all ecore files
       entries.stream()
           .filter(entry -> entry.getName().endsWith(".ecore"))
           .forEach(
@@ -51,7 +51,6 @@ public class EMFModelInitializer {
                 }
               });
 
-      // Look for FactoryImpl classes that indicate metamodel packages
       entries.stream()
           .filter(entry -> entry.getName().endsWith("FactoryImpl.class"))
           .map(entry -> entry.getName().replace('/', '.').replace(".class", ""))
@@ -90,7 +89,6 @@ public class EMFModelInitializer {
         return packages;
       }
 
-      // Find all FactoryImpl classes
       Files.walk(classesDir)
           .filter(p -> Files.isRegularFile(p))
           .filter(p -> p.toString().endsWith("FactoryImpl.class"))
@@ -137,10 +135,7 @@ public class EMFModelInitializer {
    * @param packages map to collect registered packages
    */
   private static void loadEcorePackage(
-      java.io.InputStream ecoreStream, Map<String, EPackage> packages) {
-    // This would load and parse the ecore file
-    // For now, this is a placeholder that could be extended with actual implementation
-  }
+      java.io.InputStream ecoreStream, Map<String, EPackage> packages) {}
 
   /**
    * Loads a metamodel package class and registers it.
@@ -150,19 +145,16 @@ public class EMFModelInitializer {
    */
   private static void loadMetamodelPackage(String className, Map<String, EPackage> packages) {
     try {
-      // Load the FactoryImpl class
       Class<?> factoryClass = Class.forName(className);
 
-      // Get the eINSTANCE field
-      java.lang.reflect.Field instanceField = factoryClass.getField("eINSTANCE");
+      Field instanceField = factoryClass.getField("eINSTANCE");
       Object factoryInstance = instanceField.get(null);
 
-      // Get the eClass field from the package
       String packageClassName =
           className.substring(0, className.lastIndexOf("FactoryImpl")) + "Package";
       Class<?> packageClass = Class.forName(packageClassName);
-      java.lang.reflect.Field eINSTANCE = packageClass.getField("eINSTANCE");
-      EPackage ePackage = (EPackage) eINSTANCE.get(null);
+      Field instance = packageClass.getField("eINSTANCE");
+      EPackage ePackage = (EPackage) instance.get(null);
 
       if (ePackage != null) {
         String nsUri = ePackage.getNsURI();

@@ -13,11 +13,7 @@ public class MissingModelException extends Exception {
     super(message, cause);
   }
 
-  /**
-   * Exception thrown when a required model is missing.
-   *
-   * @param cause
-   */
+  /** Exception thrown when a required model is missing. */
   public MissingModelException(Throwable cause) {
     super(cause);
   }

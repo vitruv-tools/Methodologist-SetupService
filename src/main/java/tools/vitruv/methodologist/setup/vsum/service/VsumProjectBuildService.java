@@ -186,23 +186,6 @@ public class VsumProjectBuildService {
   }
 
   /**
-   * Stores metamodel nsURI information for build-time EMF initialization.
-   *
-   * @param modelPairs metamodel/genmodel file pairs
-   * @return map of model names to nsURIs
-   */
-  Map<String, String> extractMetamodelNamespaceMap(List<VsumService.ModelFiles> modelPairs) {
-    Map<String, String> modelNameToNsUri = new HashMap<>();
-    for (VsumService.ModelFiles pair : modelPairs) {
-      MetamodelInfo info = readMetamodelInfo(pair.metamodelFile());
-      if (info != null && info.nsUri != null && !info.nsUri.isBlank()) {
-        modelNameToNsUri.put(info.packageName != null ? info.packageName : "model", info.nsUri);
-      }
-    }
-    return modelNameToNsUri;
-  }
-
-  /**
    * Rewrites each {@code import "..."} statement in a single reaction file's content, replacing
    * imports that do not match a known nsURI with the nsURI mapped from the import's last path
    * segment.
@@ -232,6 +215,23 @@ public class VsumProjectBuildService {
     }
     matcher.appendTail(rewritten);
     return rewritten.toString();
+  }
+
+  /**
+   * Stores metamodel nsURI information for build-time EMF initialization.
+   *
+   * @param modelPairs metamodel/genmodel file pairs
+   * @return map of model names to nsURIs
+   */
+  Map<String, String> extractMetamodelNamespaceMap(List<VsumService.ModelFiles> modelPairs) {
+    Map<String, String> modelNameToNsUri = new HashMap<>();
+    for (VsumService.ModelFiles pair : modelPairs) {
+      MetamodelInfo info = readMetamodelInfo(pair.metamodelFile());
+      if (info != null && info.nsUri != null && !info.nsUri.isBlank()) {
+        modelNameToNsUri.put(info.packageName != null ? info.packageName : "model", info.nsUri);
+      }
+    }
+    return modelNameToNsUri;
   }
 
   /**

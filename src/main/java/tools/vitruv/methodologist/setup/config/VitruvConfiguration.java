@@ -95,7 +95,6 @@ public class VitruvConfiguration {
    * @param paths The metamodel argument string.
    */
   public void setMetaModelLocations(String paths) {
-    String nsUri = "";
     Resource.Factory.Registry reg = Resource.Factory.Registry.INSTANCE;
     reg.getExtensionToFactoryMap().put("ecore", new XMIResourceFactoryImpl());
     reg.getExtensionToFactoryMap().put("genmodel", new XMIResourceFactoryImpl());
@@ -114,6 +113,7 @@ public class VitruvConfiguration {
       ResourceSet resourceSet = new ResourceSetImpl();
       URI uri = URI.createFileURI(metamodel.getAbsolutePath().trim());
       Resource resource = resourceSet.getResource(uri, true);
+      String nsUri = "";
       if (!resource.getContents().isEmpty()
           && resource.getContents().get(0) instanceof EPackage ePackage) {
         URI genmodelURI = URI.createFileURI(genmodel.getAbsolutePath());
