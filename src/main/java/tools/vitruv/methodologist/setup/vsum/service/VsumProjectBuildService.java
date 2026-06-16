@@ -243,16 +243,6 @@ public class VsumProjectBuildService {
     }
   }
 
-  private static class MetamodelInfo {
-    private final String packageName;
-    private final String nsUri;
-
-    private MetamodelInfo(String packageName, String nsUri) {
-      this.packageName = packageName;
-      this.nsUri = nsUri;
-    }
-  }
-
   /**
    * Writes a multipart file to disk.
    *
@@ -314,6 +304,16 @@ public class VsumProjectBuildService {
     try {
       Files.deleteIfExists(path);
     } catch (IOException ignored) {
+    }
+  }
+
+  private static class MetamodelInfo {
+    private final String packageName;
+    private final String nsUri;
+
+    private MetamodelInfo(String packageName, String nsUri) {
+      this.packageName = packageName;
+      this.nsUri = nsUri;
     }
   }
 }

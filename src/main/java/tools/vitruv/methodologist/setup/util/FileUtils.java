@@ -16,14 +16,14 @@ import tools.vitruv.methodologist.setup.config.CustomClassLoader;
 @Slf4j
 public final class FileUtils {
 
-  private FileUtils() {}
-
   /**
    * The CLASS_LOADER is used to load classes from JAR files at runtime. It is used to load the
    * classes of the virtual model builder.
    */
   public static final CustomClassLoader CLASS_LOADER =
       new CustomClassLoader(new URL[] {}, ClassLoader.getSystemClassLoader());
+
+  private FileUtils() {}
 
   /**
    * Copy a file to a new location.

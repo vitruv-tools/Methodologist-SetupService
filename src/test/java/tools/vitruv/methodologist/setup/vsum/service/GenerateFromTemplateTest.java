@@ -51,6 +51,38 @@ class GenerateFromTemplateTest {
     return Files.readString(target);
   }
 
+  /**
+   * Builds a configuration with a local path and package name suitable for the mwe2 and plugin
+   * generators.
+   *
+   * @return a populated configuration
+   */
+  private VitruvConfiguration configuration() {
+    VitruvConfiguration config = new VitruvConfiguration();
+    config.setLocalPath(tempDir);
+    config.setPackageName(PACKAGE_NAME);
+    return config;
+  }
+
+  /**
+   * Builds a metamodel location whose genmodel file name is {@code model.genmodel}.
+   *
+   * @param modelDirectory the model directory used by the mwe2 generator
+   * @return a metamodel location
+   */
+  private MetamodelLocation metamodelLocation(String modelDirectory) {
+    File metamodel = tempDir.resolve("model.ecore").toFile();
+    File genmodel = tempDir.resolve("model.genmodel").toFile();
+    return new MetamodelLocation(metamodel, genmodel, "http://example.org/model", modelDirectory);
+  }
+
+  /** Verifies the placeholder for the unused private field assertion utility. */
+  @Test
+  @DisplayName("Should expose a no-argument constructor")
+  void exposesNoArgConstructor() {
+    assertEquals(GenerateFromTemplate.class, new GenerateFromTemplate().getClass());
+  }
+
   @Nested
   @DisplayName("generateRootPom")
   class GenerateRootPom {
@@ -326,37 +358,5 @@ class GenerateFromTemplateTest {
           IOException.class,
           () -> generator.generateVsumPom(directoryTarget.toFile(), PACKAGE_NAME));
     }
-  }
-
-  /**
-   * Builds a configuration with a local path and package name suitable for the mwe2 and plugin
-   * generators.
-   *
-   * @return a populated configuration
-   */
-  private VitruvConfiguration configuration() {
-    VitruvConfiguration config = new VitruvConfiguration();
-    config.setLocalPath(tempDir);
-    config.setPackageName(PACKAGE_NAME);
-    return config;
-  }
-
-  /**
-   * Builds a metamodel location whose genmodel file name is {@code model.genmodel}.
-   *
-   * @param modelDirectory the model directory used by the mwe2 generator
-   * @return a metamodel location
-   */
-  private MetamodelLocation metamodelLocation(String modelDirectory) {
-    File metamodel = tempDir.resolve("model.ecore").toFile();
-    File genmodel = tempDir.resolve("model.genmodel").toFile();
-    return new MetamodelLocation(metamodel, genmodel, "http://example.org/model", modelDirectory);
-  }
-
-  /** Verifies the placeholder for the unused private field assertion utility. */
-  @Test
-  @DisplayName("Should expose a no-argument constructor")
-  void exposesNoArgConstructor() {
-    assertEquals(GenerateFromTemplate.class, new GenerateFromTemplate().getClass());
   }
 }

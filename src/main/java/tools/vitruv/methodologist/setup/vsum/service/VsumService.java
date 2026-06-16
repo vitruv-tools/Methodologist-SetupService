@@ -5,8 +5,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.io.StringWriter;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -21,7 +21,6 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-
 import tools.vitruv.methodologist.setup.config.VitruvConfiguration;
 import tools.vitruv.methodologist.setup.exception.MissingModelException;
 
@@ -31,13 +30,6 @@ import tools.vitruv.methodologist.setup.exception.MissingModelException;
 public class VsumService {
 
   private final GenerateFromTemplate generateFromTemplate;
-
-  public record ModelFiles(File metamodelFile, File genmodelFile) {
-    public ModelFiles {
-      Objects.requireNonNull(metamodelFile, "metamodelFile must not be null");
-      Objects.requireNonNull(genmodelFile, "genmodelFile must not be null");
-    }
-  }
 
   /**
    * Generates a full VSUM project, builds it with Maven, and returns the project archive as bytes.
@@ -299,6 +291,13 @@ public class VsumService {
               });
     } catch (IOException e) {
       // Best-effort cleanup; ignore cleanup failures.
+    }
+  }
+
+  public record ModelFiles(File metamodelFile, File genmodelFile) {
+    public ModelFiles {
+      Objects.requireNonNull(metamodelFile, "metamodelFile must not be null");
+      Objects.requireNonNull(genmodelFile, "genmodelFile must not be null");
     }
   }
 }

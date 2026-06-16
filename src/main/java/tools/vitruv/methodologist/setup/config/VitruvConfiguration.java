@@ -20,16 +20,19 @@ import org.eclipse.emf.ecore.xmi.impl.XMIResourceFactoryImpl;
 @Slf4j
 public class VitruvConfiguration {
 
+  /** -- GETTER -- Returns the model names. */
+  @Getter private final List<String> modelNames = new ArrayList<>();
+  private final List<MetamodelLocation> metamodelLocations = new ArrayList<>();
+  /** -- GETTER -- Returns the reaction file locations used by the CLI. */
+  @Getter private final List<Path> reactionLocations = new ArrayList<>();
   /**
    * -- SETTER -- Sets the local path of the configuration.
    *
    * <p>-- GETTER -- Returns the local path of the configuration.
    */
   @Getter @Setter private Path localPath;
-
   /** -- GETTER -- Returns the package name. */
   @Getter private String packageName;
-
   /**
    * -- SETTER -- Sets the workflow of the configuration.
    *
@@ -37,13 +40,19 @@ public class VitruvConfiguration {
    */
   @Getter @Setter private File workflow;
 
-  /** -- GETTER -- Returns the model names. */
-  @Getter private final List<String> modelNames = new ArrayList<>();
-
-  private final List<MetamodelLocation> metamodelLocations = new ArrayList<>();
-
-  /** -- GETTER -- Returns the reaction file locations used by the CLI. */
-  @Getter private final List<Path> reactionLocations = new ArrayList<>();
+  /**
+   * Removes the last segment of a string.
+   *
+   * @param input The input string.
+   * @return The input string without the last segment.
+   */
+  public static String removeLastSegment(String input) {
+    int lastDotIndex = input.lastIndexOf('.');
+    if (lastDotIndex == -1) {
+      return input;
+    }
+    return input.substring(0, lastDotIndex);
+  }
 
   /**
    * Adds a metamodel location to the configuration.
@@ -52,6 +61,27 @@ public class VitruvConfiguration {
    */
   public void addMetamodelLocations(MetamodelLocation metamodelLocation) {
     this.metamodelLocations.add(metamodelLocation);
+  }
+
+  /**
+   * Sets the reaction file locations used by the CLI.
+   *
+   * @param reactionLocations list of paths to reaction files.
+   */
+  public void setReactionLocations(List<Path> reactionLocations) {
+    this.reactionLocations.clear();
+    if (reactionLocations != null) {
+      this.reactionLocations.addAll(reactionLocations);
+    }
+  }
+
+  /**
+   * Returns the metamodel locations.
+   *
+   * @return The metamodel locations.
+   */
+  public List<MetamodelLocation> getMetaModelLocations() {
+    return this.metamodelLocations;
   }
 
   /**
@@ -97,41 +127,6 @@ public class VitruvConfiguration {
       this.addMetamodelLocations(
           new MetamodelLocation(metamodel, genmodel, nsUri, localModelDirectory));
     }
-  }
-
-  /**
-   * Sets the reaction file locations used by the CLI.
-   *
-   * @param reactionLocations list of paths to reaction files.
-   */
-  public void setReactionLocations(List<Path> reactionLocations) {
-    this.reactionLocations.clear();
-    if (reactionLocations != null) {
-      this.reactionLocations.addAll(reactionLocations);
-    }
-  }
-
-  /**
-   * Removes the last segment of a string.
-   *
-   * @param input The input string.
-   * @return The input string without the last segment.
-   */
-  public static String removeLastSegment(String input) {
-    int lastDotIndex = input.lastIndexOf('.');
-    if (lastDotIndex == -1) {
-      return input;
-    }
-    return input.substring(0, lastDotIndex);
-  }
-
-  /**
-   * Returns the metamodel locations.
-   *
-   * @return The metamodel locations.
-   */
-  public List<MetamodelLocation> getMetaModelLocations() {
-    return this.metamodelLocations;
   }
 
   /**

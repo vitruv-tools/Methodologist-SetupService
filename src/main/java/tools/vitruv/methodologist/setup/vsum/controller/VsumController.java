@@ -52,10 +52,11 @@ public class VsumController {
         @ApiResponse(responseCode = "500", description = "Build failed")
       })
   public ResponseEntity<byte[]> buildProject(
-      @Parameter(description = "Metamodel files", required = true)
-          @RequestPart("metamodelFiles")
+      @Parameter(description = "Metamodel files", required = true) @RequestPart("metamodelFiles")
           List<MultipartFile> metamodelFiles,
-      @Parameter(description = "Genmodel files paired by index with metamodel files", required = true)
+      @Parameter(
+              description = "Genmodel files paired by index with metamodel files",
+              required = true)
           @RequestPart("genmodelFiles")
           List<MultipartFile> genmodelFiles,
       @Parameter(description = "Optional reaction files")
@@ -86,4 +87,3 @@ public class VsumController {
     return "vsum-project-" + timestamp + ".zip";
   }
 }
-

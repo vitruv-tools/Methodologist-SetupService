@@ -23,10 +23,10 @@ import tools.vitruv.methodologist.setup.util.FileUtils;
 @Slf4j
 @Service
 public class GenerateFromTemplate {
+  private static final String PACKAGE_NAME = "packageName";
+
   /** Constructor. */
   public GenerateFromTemplate() {}
-
-  private static final String PACKAGE_NAME = "packageName";
 
   private Configuration getConfiguration() {
     Configuration cfg = new Configuration(Configuration.VERSION_2_3_31);
