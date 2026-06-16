@@ -60,13 +60,11 @@ public class VitruvConfiguration {
    * @param paths The metamodel argument string.
    */
   public void setMetaModelLocations(String paths) {
-    // Register the GenModel resource factory
     String nsUri = "";
     Resource.Factory.Registry reg = Resource.Factory.Registry.INSTANCE;
     reg.getExtensionToFactoryMap().put("ecore", new XMIResourceFactoryImpl());
     reg.getExtensionToFactoryMap().put("genmodel", new XMIResourceFactoryImpl());
 
-    // Register the GenModel package
     GenModelPackage.eINSTANCE.eClass();
 
     for (String modelPaths : paths.split(";")) {
@@ -78,13 +76,11 @@ public class VitruvConfiguration {
 
       String localModelDirectory = "";
 
-      // getting the URI from the genmodels
       ResourceSet resourceSet = new ResourceSetImpl();
       URI uri = URI.createFileURI(metamodel.getAbsolutePath().trim());
       Resource resource = resourceSet.getResource(uri, true);
       if (!resource.getContents().isEmpty()
           && resource.getContents().get(0) instanceof EPackage ePackage) {
-        // Load the GenModel to get the modelPluginID
         URI genmodelURI = URI.createFileURI(genmodel.getAbsolutePath());
         nsUri = genmodelURI.toString();
         Resource genmodelResource = resourceSet.getResource(genmodelURI, true);
@@ -124,7 +120,6 @@ public class VitruvConfiguration {
   public static String removeLastSegment(String input) {
     int lastDotIndex = input.lastIndexOf('.');
     if (lastDotIndex == -1) {
-      // No dot found, return the original string
       return input;
     }
     return input.substring(0, lastDotIndex);
