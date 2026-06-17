@@ -8,6 +8,7 @@ import java.io.InputStreamReader;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
@@ -24,12 +25,20 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import tools.vitruv.methodologist.setup.config.VitruvConfiguration;
 import tools.vitruv.methodologist.setup.exception.MissingModelException;
+import tools.vitruv.methodologist.setup.messages.ErrorMessages;
 
 /** Business service for building and packaging VSUM projects from uploaded model files. */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class VsumService {
+
+  /**
+   * Path, relative to the generated project root, of the executable VSUM jar produced by the Maven
+   * build.
+   */
+  static final String VSUM_JAR_RELATIVE_PATH =
+      "vsum/target/tools.vitruv.methodologisttemplate.vsum-0.1.0-SNAPSHOT-jar-with-dependencies.jar";
 
   private final GenerateFromTemplate generateFromTemplate;
 
@@ -49,25 +58,7 @@ public class VsumService {
       List<File> reactionFiles,
       Map<String, String> metamodelNamespaceMap)
       throws IOException, InterruptedException, MissingModelException {
-    validateInputs(modelFiles, reactionFiles);
-
-    Path workspace = Files.createTempDirectory("vitruv-cli-project-");
-    try {
-      VitruvConfiguration configuration = new VitruvConfiguration();
-      configuration.setLocalPath(workspace);
-
-      List<ModelFiles> copiedModelFiles = copyModelFiles(workspace, modelFiles);
-      configuration.setMetaModelLocations(buildModelLocations(copiedModelFiles));
-
-      List<Path> copiedReactionFiles = copyReactionFiles(workspace, reactionFiles);
-      configuration.setReactionLocations(copiedReactionFiles);
-
-      generateProjectFiles(configuration);
-      runMavenBuild(workspace, metamodelNamespaceMap);
-      return zipDirectory(workspace);
-    } finally {
-      deleteRecursively(workspace);
-    }
+    return buildProject(modelFiles, reactionFiles, metamodelNamespaceMap, this::zipDirectory);
   }
 
   /**
@@ -83,6 +74,83 @@ public class VsumService {
   public byte[] generateProjectArchive(List<ModelFiles> modelFiles, List<File> reactionFiles)
       throws IOException, InterruptedException, MissingModelException {
     return generateProjectArchive(modelFiles, reactionFiles, Map.of());
+  }
+
+  /**
+   * Generates a full VSUM project, builds it with Maven, and returns only the executable VSUM jar
+   * (the {@value #VSUM_JAR_RELATIVE_PATH} produced under the project's {@code vsum/target}
+   * directory) as bytes, instead of the whole project archive.
+   *
+   * @param modelFiles paired metamodel/genmodel files
+   * @param reactionFiles optional reaction files
+   * @param metamodelNamespaceMap map of model names to nsURIs
+   * @return the bytes of the built VSUM jar-with-dependencies
+   * @throws IOException when file IO, build execution, or jar extraction fails
+   * @throws InterruptedException when the build process is interrupted
+   * @throws MissingModelException when the model configuration is invalid
+   */
+  public byte[] generateProjectJar(
+      List<ModelFiles> modelFiles,
+      List<File> reactionFiles,
+      Map<String, String> metamodelNamespaceMap)
+      throws IOException, InterruptedException, MissingModelException {
+    return buildProject(modelFiles, reactionFiles, metamodelNamespaceMap, this::extractVsumJar);
+  }
+
+  /**
+   * Generates a full VSUM project, builds it with Maven, and returns only the executable VSUM jar as
+   * bytes.
+   *
+   * @param modelFiles paired metamodel/genmodel files
+   * @param reactionFiles optional reaction files
+   * @return the bytes of the built VSUM jar-with-dependencies
+   * @throws IOException when file IO, build execution, or jar extraction fails
+   * @throws InterruptedException when the build process is interrupted
+   * @throws MissingModelException when the model configuration is invalid
+   */
+  public byte[] generateProjectJar(List<ModelFiles> modelFiles, List<File> reactionFiles)
+      throws IOException, InterruptedException, MissingModelException {
+    return generateProjectJar(modelFiles, reactionFiles, Map.of());
+  }
+
+  /**
+   * Generates the project from templates, runs the Maven build, and extracts a single build
+   * artifact from the workspace, deleting the workspace afterwards regardless of outcome.
+   *
+   * @param modelFiles paired metamodel/genmodel files
+   * @param reactionFiles optional reaction files
+   * @param metamodelNamespaceMap map of model names to nsURIs passed to the build
+   * @param artifactExtractor extracts the resulting bytes from the built workspace
+   * @return the extracted artifact bytes
+   * @throws IOException when file IO, build execution, or artifact extraction fails
+   * @throws InterruptedException when the build process is interrupted
+   * @throws MissingModelException when the model configuration is invalid
+   */
+  private byte[] buildProject(
+      List<ModelFiles> modelFiles,
+      List<File> reactionFiles,
+      Map<String, String> metamodelNamespaceMap,
+      ArtifactExtractor artifactExtractor)
+      throws IOException, InterruptedException, MissingModelException {
+    validateInputs(modelFiles, reactionFiles);
+
+    Path workspace = Files.createTempDirectory("vitruv-cli-project-");
+    try {
+      VitruvConfiguration configuration = new VitruvConfiguration();
+      configuration.setLocalPath(workspace);
+
+      List<ModelFiles> copiedModelFiles = copyModelFiles(workspace, modelFiles);
+      configuration.setMetaModelLocations(buildModelLocations(copiedModelFiles));
+
+      List<Path> copiedReactionFiles = copyReactionFiles(workspace, reactionFiles);
+      configuration.setReactionLocations(copiedReactionFiles);
+
+      generateProjectFiles(configuration);
+      runMavenBuild(workspace, metamodelNamespaceMap);
+      return artifactExtractor.extract(workspace);
+    } finally {
+      deleteRecursively(workspace);
+    }
   }
 
   /**
@@ -334,6 +402,21 @@ public class VsumService {
   }
 
   /**
+   * Extracts the executable VSUM jar produced by the Maven build from the built workspace.
+   *
+   * @param workspace root directory of the generated and built project
+   * @return the bytes of the {@value #VSUM_JAR_RELATIVE_PATH} artifact
+   * @throws IOException when the expected jar is missing or cannot be read
+   */
+  private byte[] extractVsumJar(Path workspace) throws IOException {
+    Path jarPath = workspace.resolve(VSUM_JAR_RELATIVE_PATH);
+    if (!Files.isRegularFile(jarPath)) {
+      throw new NoSuchFileException(String.format(ErrorMessages.VSUM_JAR_NOT_FOUND, jarPath));
+    }
+    return Files.readAllBytes(jarPath);
+  }
+
+  /**
    * Zips the entire contents of the given directory into an in-memory archive, preserving the
    * directory structure with forward-slash separators and deterministic entry ordering.
    *
@@ -390,6 +473,23 @@ public class VsumService {
     } catch (IOException e) {
       log.error(e.getMessage());
     }
+  }
+
+  /**
+   * Strategy for extracting the bytes to return from a fully built project workspace, allowing the
+   * same generate-and-build pipeline to produce either the whole project archive or a single
+   * artifact.
+   */
+  @FunctionalInterface
+  private interface ArtifactExtractor {
+    /**
+     * Extracts the result bytes from the built workspace.
+     *
+     * @param workspace root directory of the generated and built project
+     * @return the bytes to return to the caller
+     * @throws IOException when reading or assembling the artifact fails
+     */
+    byte[] extract(Path workspace) throws IOException;
   }
 
   /**

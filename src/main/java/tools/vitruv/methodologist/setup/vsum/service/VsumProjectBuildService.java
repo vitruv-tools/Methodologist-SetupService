@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -24,6 +25,7 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import tools.vitruv.methodologist.setup.exception.MethodologistSetupException;
 import tools.vitruv.methodologist.setup.exception.MissingModelException;
+import tools.vitruv.methodologist.setup.messages.ErrorMessages;
 
 /** Coordinates VSUM project build operations from uploaded files. */
 @Slf4j
@@ -38,18 +40,62 @@ public class VsumProjectBuildService {
   private final VsumService vsumService;
 
   /**
-   * Builds a VSUM project from uploaded files and returns a zip archive.
+   * Builds a VSUM project from uploaded files and returns a zip archive of the whole project.
    *
    * @param metamodelFiles metamodel files
    * @param genmodelFiles genmodel files in the same order as metamodel files
-   * @param reactionFiles optional reaction files
+   * @param reactionFiles reaction files
    * @return built project archive bytes
+   * @throws NoSuchFileException when the build does not produce the expected artifact
    */
   public byte[] buildProjectArchive(
       List<MultipartFile> metamodelFiles,
       List<MultipartFile> genmodelFiles,
-      List<MultipartFile> reactionFiles) {
-    validateInputs(metamodelFiles, genmodelFiles);
+      List<MultipartFile> reactionFiles)
+      throws NoSuchFileException {
+    return buildArtifact(
+        metamodelFiles, genmodelFiles, reactionFiles, vsumService::generateProjectArchive);
+  }
+
+  /**
+   * Builds a VSUM project from uploaded files and returns only the executable VSUM
+   * jar-with-dependencies produced under the project's {@code vsum/target} directory, rather than
+   * the whole project archive.
+   *
+   * @param metamodelFiles metamodel files
+   * @param genmodelFiles genmodel files in the same order as metamodel files
+   * @param reactionFiles reaction files
+   * @return the bytes of the built VSUM jar
+   * @throws NoSuchFileException when the build does not produce the expected jar
+   */
+  public byte[] buildProjectJar(
+      List<MultipartFile> metamodelFiles,
+      List<MultipartFile> genmodelFiles,
+      List<MultipartFile> reactionFiles)
+      throws NoSuchFileException {
+    return buildArtifact(
+        metamodelFiles, genmodelFiles, reactionFiles, vsumService::generateProjectJar);
+  }
+
+  /**
+   * Validates the uploaded files, materializes them into a temporary workspace, and delegates to
+   * the supplied generator to produce the requested build artifact, cleaning up the workspace
+   * afterwards regardless of outcome.
+   *
+   * @param metamodelFiles metamodel files
+   * @param genmodelFiles genmodel files in the same order as metamodel files
+   * @param reactionFiles reaction files
+   * @param generator the VSUM generation strategy producing the artifact bytes
+   * @return the produced artifact bytes
+   * @throws NoSuchFileException when the expected build artifact is missing
+   */
+  private byte[] buildArtifact(
+      List<MultipartFile> metamodelFiles,
+      List<MultipartFile> genmodelFiles,
+      List<MultipartFile> reactionFiles,
+      ProjectArtifactGenerator generator)
+      throws NoSuchFileException {
+    validateInputs(metamodelFiles, genmodelFiles, reactionFiles);
 
     Path uploadWorkspace = null;
     try {
@@ -59,8 +105,9 @@ public class VsumProjectBuildService {
       List<File> copiedReactionFiles = toReactionFiles(uploadWorkspace, reactionFiles);
       normalizeReactionImports(modelPairs, copiedReactionFiles);
       Map<String, String> metamodelNamespaceMap = extractMetamodelNamespaceMap(modelPairs);
-      return vsumService.generateProjectArchive(
-          modelPairs, copiedReactionFiles, metamodelNamespaceMap);
+      return generator.generate(modelPairs, copiedReactionFiles, metamodelNamespaceMap);
+    } catch (NoSuchFileException e) {
+      throw e;
     } catch (IOException | MissingModelException e) {
       throw new MethodologistSetupException(
           VSUM_BUILD_ERROR_CODE, "Failed to build VSUM project archive", e);
@@ -74,13 +121,17 @@ public class VsumProjectBuildService {
   }
 
   /**
-   * Validates uploaded metamodel/genmodel lists.
+   * Validates uploaded metamodel, genmodel, and reaction lists. Metamodel, genmodel, and reaction
+   * files are all mandatory.
    *
    * @param metamodelFiles metamodel files
    * @param genmodelFiles genmodel files
+   * @param reactionFiles reaction files
    */
   private void validateInputs(
-      List<MultipartFile> metamodelFiles, List<MultipartFile> genmodelFiles) {
+      List<MultipartFile> metamodelFiles,
+      List<MultipartFile> genmodelFiles,
+      List<MultipartFile> reactionFiles) {
     if (metamodelFiles == null
         || genmodelFiles == null
         || metamodelFiles.isEmpty()
@@ -100,6 +151,14 @@ public class VsumProjectBuildService {
     }
     for (MultipartFile file : genmodelFiles) {
       validateUploadedFile(file, "genmodel file");
+    }
+
+    if (reactionFiles == null || reactionFiles.isEmpty()) {
+      throw new MethodologistSetupException(
+          VSUM_INPUT_ERROR_CODE, ErrorMessages.VSUM_REACTION_FILES_REQUIRED);
+    }
+    for (MultipartFile file : reactionFiles) {
+      validateUploadedFile(file, "reaction file");
     }
   }
 
@@ -339,6 +398,31 @@ public class VsumProjectBuildService {
     } catch (IOException e) {
       log.error(e.getMessage());
     }
+  }
+
+  /**
+   * Strategy selecting which VSUM build artifact to generate from the prepared model inputs, so the
+   * shared upload-and-build pipeline can produce either the whole project archive or a single
+   * artifact.
+   */
+  @FunctionalInterface
+  private interface ProjectArtifactGenerator {
+    /**
+     * Generates the requested artifact from the prepared model inputs.
+     *
+     * @param modelPairs metamodel/genmodel file pairs
+     * @param reactionFiles copied reaction files
+     * @param metamodelNamespaceMap map of model names to nsURIs
+     * @return the produced artifact bytes
+     * @throws IOException when file IO or artifact extraction fails
+     * @throws InterruptedException when the build process is interrupted
+     * @throws MissingModelException when the model configuration is invalid
+     */
+    byte[] generate(
+        List<VsumService.ModelFiles> modelPairs,
+        List<File> reactionFiles,
+        Map<String, String> metamodelNamespaceMap)
+        throws IOException, InterruptedException, MissingModelException;
   }
 
   /** Immutable holder for a metamodel's package name and nsURI. */

@@ -105,16 +105,41 @@ class VsumProjectBuildServiceTest {
   }
 
   @Test
-  void buildProjectArchive_shouldBuildArchiveWithoutReactionFiles() throws Exception {
+  void buildProjectArchive_shouldThrowWhenReactionFilesNull() {
 
-    when(vsumService.generateProjectArchive(anyList(), anyList(), anyMap()))
-        .thenReturn(new byte[] {1});
+    assertThatThrownBy(
+            () ->
+                service.buildProjectArchive(
+                    List.of(validMetamodel()), List.of(mockMultipart("model.genmodel")), null))
+        .isInstanceOf(MethodologistSetupException.class)
+        .hasMessageContaining("reaction file is required");
+  }
 
-    byte[] archive =
-        service.buildProjectArchive(
-            List.of(validMetamodel()), List.of(mockMultipart("model.genmodel")), List.of());
+  @Test
+  void buildProjectArchive_shouldThrowWhenReactionFilesEmpty() {
 
-    assertThat(archive).isNotEmpty();
+    assertThatThrownBy(
+            () ->
+                service.buildProjectArchive(
+                    List.of(validMetamodel()), List.of(mockMultipart("model.genmodel")), List.of()))
+        .isInstanceOf(MethodologistSetupException.class)
+        .hasMessageContaining("reaction file is required");
+  }
+
+  @Test
+  void buildProjectArchive_shouldThrowWhenReactionFileEmpty() {
+
+    MultipartFile empty =
+        new MockMultipartFile("file", "sample.reactions", "text/plain", new byte[0]);
+
+    assertThatThrownBy(
+            () ->
+                service.buildProjectArchive(
+                    List.of(validMetamodel()),
+                    List.of(mockMultipart("model.genmodel")),
+                    List.of(empty)))
+        .isInstanceOf(MethodologistSetupException.class)
+        .hasMessageContaining("reaction file");
   }
 
   @Test
@@ -126,9 +151,27 @@ class VsumProjectBuildServiceTest {
     assertThatThrownBy(
             () ->
                 service.buildProjectArchive(
-                    List.of(validMetamodel()), List.of(mockMultipart("model.genmodel")), List.of()))
+                    List.of(validMetamodel()),
+                    List.of(mockMultipart("model.genmodel")),
+                    List.of(reactionFile())))
         .isInstanceOf(MethodologistSetupException.class)
         .hasMessageContaining("Failed to build VSUM project archive");
+  }
+
+  @Test
+  void buildProjectArchive_shouldPropagateNoSuchFileException() throws Exception {
+
+    when(vsumService.generateProjectArchive(anyList(), anyList(), anyMap()))
+        .thenThrow(new java.nio.file.NoSuchFileException("missing.jar"));
+
+    assertThatThrownBy(
+            () ->
+                service.buildProjectArchive(
+                    List.of(validMetamodel()),
+                    List.of(mockMultipart("model.genmodel")),
+                    List.of(reactionFile())))
+        .isInstanceOf(java.nio.file.NoSuchFileException.class)
+        .hasMessageContaining("missing.jar");
   }
 
   @Test
@@ -140,7 +183,9 @@ class VsumProjectBuildServiceTest {
     assertThatThrownBy(
             () ->
                 service.buildProjectArchive(
-                    List.of(validMetamodel()), List.of(mockMultipart("model.genmodel")), List.of()))
+                    List.of(validMetamodel()),
+                    List.of(mockMultipart("model.genmodel")),
+                    List.of(reactionFile())))
         .isInstanceOf(MethodologistSetupException.class);
   }
 
@@ -153,7 +198,102 @@ class VsumProjectBuildServiceTest {
     assertThatThrownBy(
             () ->
                 service.buildProjectArchive(
+                    List.of(validMetamodel()),
+                    List.of(mockMultipart("model.genmodel")),
+                    List.of(reactionFile())))
+        .isInstanceOf(MethodologistSetupException.class);
+
+    assertThat(Thread.currentThread().isInterrupted()).isTrue();
+
+    Thread.interrupted();
+  }
+
+  @Test
+  void buildProjectJar_shouldThrowWhenCountsDoNotMatch() {
+
+    assertThatThrownBy(
+            () ->
+                service.buildProjectJar(
+                    List.of(mockMultipart("a.ecore"), mockMultipart("b.ecore")),
+                    List.of(mockMultipart("a.genmodel")),
+                    List.of()))
+        .isInstanceOf(MethodologistSetupException.class)
+        .hasMessageContaining("counts must be identical");
+  }
+
+  @Test
+  void buildProjectJar_shouldReturnJarBytes() throws Exception {
+
+    byte[] expected = {7, 8, 9};
+
+    when(vsumService.generateProjectJar(anyList(), anyList(), anyMap())).thenReturn(expected);
+
+    byte[] jar =
+        service.buildProjectJar(
+            List.of(validMetamodel()),
+            List.of(mockMultipart("model.genmodel")),
+            List.of(reactionFile()));
+
+    assertThat(jar).isEqualTo(expected);
+
+    verify(vsumService).generateProjectJar(anyList(), anyList(), anyMap());
+  }
+
+  @Test
+  void buildProjectJar_shouldThrowWhenReactionFilesEmpty() {
+
+    assertThatThrownBy(
+            () ->
+                service.buildProjectJar(
                     List.of(validMetamodel()), List.of(mockMultipart("model.genmodel")), List.of()))
+        .isInstanceOf(MethodologistSetupException.class)
+        .hasMessageContaining("reaction file is required");
+  }
+
+  @Test
+  void buildProjectJar_shouldWrapIOException() throws Exception {
+
+    when(vsumService.generateProjectJar(anyList(), anyList(), anyMap()))
+        .thenThrow(new java.io.IOException("boom"));
+
+    assertThatThrownBy(
+            () ->
+                service.buildProjectJar(
+                    List.of(validMetamodel()),
+                    List.of(mockMultipart("model.genmodel")),
+                    List.of(reactionFile())))
+        .isInstanceOf(MethodologistSetupException.class)
+        .hasMessageContaining("Failed to build VSUM project");
+  }
+
+  @Test
+  void buildProjectJar_shouldPropagateNoSuchFileException() throws Exception {
+
+    when(vsumService.generateProjectJar(anyList(), anyList(), anyMap()))
+        .thenThrow(new java.nio.file.NoSuchFileException("missing.jar"));
+
+    assertThatThrownBy(
+            () ->
+                service.buildProjectJar(
+                    List.of(validMetamodel()),
+                    List.of(mockMultipart("model.genmodel")),
+                    List.of(reactionFile())))
+        .isInstanceOf(java.nio.file.NoSuchFileException.class)
+        .hasMessageContaining("missing.jar");
+  }
+
+  @Test
+  void buildProjectJar_shouldWrapInterruptedException() throws Exception {
+
+    when(vsumService.generateProjectJar(anyList(), anyList(), anyMap()))
+        .thenThrow(new InterruptedException());
+
+    assertThatThrownBy(
+            () ->
+                service.buildProjectJar(
+                    List.of(validMetamodel()),
+                    List.of(mockMultipart("model.genmodel")),
+                    List.of(reactionFile())))
         .isInstanceOf(MethodologistSetupException.class);
 
     assertThat(Thread.currentThread().isInterrupted()).isTrue();
