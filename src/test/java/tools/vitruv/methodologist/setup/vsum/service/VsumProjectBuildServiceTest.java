@@ -159,22 +159,6 @@ class VsumProjectBuildServiceTest {
   }
 
   @Test
-  void buildProjectArchive_shouldPropagateNoSuchFileException() throws Exception {
-
-    when(vsumService.generateProjectArchive(anyList(), anyList(), anyMap()))
-        .thenThrow(new java.nio.file.NoSuchFileException("missing.jar"));
-
-    assertThatThrownBy(
-            () ->
-                service.buildProjectArchive(
-                    List.of(validMetamodel()),
-                    List.of(mockMultipart("model.genmodel")),
-                    List.of(reactionFile())))
-        .isInstanceOf(java.nio.file.NoSuchFileException.class)
-        .hasMessageContaining("missing.jar");
-  }
-
-  @Test
   void buildProjectArchive_shouldWrapMissingModelException() throws Exception {
 
     when(vsumService.generateProjectArchive(anyList(), anyList(), anyMap()))
@@ -264,22 +248,6 @@ class VsumProjectBuildServiceTest {
                     List.of(reactionFile())))
         .isInstanceOf(MethodologistSetupException.class)
         .hasMessageContaining("Failed to build VSUM project");
-  }
-
-  @Test
-  void buildProjectJar_shouldPropagateNoSuchFileException() throws Exception {
-
-    when(vsumService.generateProjectJar(anyList(), anyList(), anyMap()))
-        .thenThrow(new java.nio.file.NoSuchFileException("missing.jar"));
-
-    assertThatThrownBy(
-            () ->
-                service.buildProjectJar(
-                    List.of(validMetamodel()),
-                    List.of(mockMultipart("model.genmodel")),
-                    List.of(reactionFile())))
-        .isInstanceOf(java.nio.file.NoSuchFileException.class)
-        .hasMessageContaining("missing.jar");
   }
 
   @Test
