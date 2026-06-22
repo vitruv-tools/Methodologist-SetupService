@@ -162,7 +162,8 @@ class VsumControllerTest {
     assertEquals("application/java-archive", response.getHeaders().getContentType().toString());
     assertEquals(jar.length, response.getHeaders().getContentLength());
     assertEquals(
-        "tools.vitruv.methodologisttemplate.vsum-0.1.0-SNAPSHOT-jar-with-dependencies.jar",
+        "tools.vitruv.methodologisttemplate." +
+                "vsum-0.1.0-SNAPSHOT-jar-with-dependencies.jar",
         response.getHeaders().getContentDisposition().getFilename());
 
     verify(buildService).buildProjectJar(anyList(), anyList(), any());
