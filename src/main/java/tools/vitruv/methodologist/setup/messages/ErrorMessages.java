@@ -22,6 +22,10 @@ public final class ErrorMessages {
       "Expected VSUM jar was not produced by the build: %s";
   public static final String VSUM_REACTION_FILES_REQUIRED =
       "At least one reaction file is required";
+  public static final String EMF_CLASSES_DIR_NOT_FOUND = "Classes directory not found: {}";
+  public static final String EMF_CLASSES_LOAD_PACKAGE_ERROR = "Could not load package from {}: {}";
+  public static final String EMF_CLASSES_INIT_ERROR =
+      "Error initializing EMF packages from classes directory: {}";
 
   private ErrorMessages() {
     throw new UnsupportedOperationException("This is a utility class and cannot be instantiated");

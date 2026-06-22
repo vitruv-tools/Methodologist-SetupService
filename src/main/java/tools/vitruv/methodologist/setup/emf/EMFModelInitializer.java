@@ -9,9 +9,12 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
+import java.util.stream.Stream;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.eclipse.emf.ecore.EPackage;
+import tools.vitruv.methodologist.setup.messages.ErrorMessages;
+import tools.vitruv.methodologist.setup.messages.InfoMessages;
 
 /**
  * Utility class for initializing EMF packages before Xtext validation.
@@ -85,33 +88,36 @@ public class EMFModelInitializer {
     try {
       Path classesDir = Path.of(classesPath);
       if (!Files.exists(classesDir)) {
-        logger.warn("Classes directory not found: {}", classesPath);
+        logger.warn(ErrorMessages.EMF_CLASSES_DIR_NOT_FOUND, classesPath);
         return packages;
       }
 
-      Files.walk(classesDir)
-          .filter(p -> Files.isRegularFile(p))
-          .filter(p -> p.toString().endsWith("FactoryImpl.class"))
-          .forEach(
-              classPath -> {
-                try {
-                  String className =
-                      classesDir
-                          .relativize(classPath)
-                          .toString()
-                          .replace(File.separator, ".")
-                          .replace(".class", "");
-                  loadMetamodelPackage(className, packages);
-                } catch (Exception e) {
-                  logger.debug("Could not load package from {}: {}", classPath, e.getMessage());
-                }
-              });
+      try (Stream<Path> paths = Files.walk(classesDir)) {
+        paths
+            .filter(Files::isRegularFile)
+            .filter(p -> p.toString().endsWith("FactoryImpl.class"))
+            .forEach(
+                classPath -> {
+                  try {
+                    String className =
+                        classesDir
+                            .relativize(classPath)
+                            .toString()
+                            .replace(File.separator, ".")
+                            .replace(".class", "");
+                    loadMetamodelPackage(className, packages);
+                  } catch (Exception e) {
+                    logger.debug(
+                        ErrorMessages.EMF_CLASSES_LOAD_PACKAGE_ERROR, classPath, e.getMessage());
+                  }
+                });
+      }
 
     } catch (Exception e) {
-      logger.error("Error initializing EMF packages from classes directory: {}", classesPath, e);
+      logger.error(ErrorMessages.EMF_CLASSES_INIT_ERROR, classesPath, e);
     }
 
-    logger.info("Initialized {} EMF packages from classes directory", packages.size());
+    logger.info(InfoMessages.EMF_CLASSES_INIT_SUCCESS, packages.size());
     return packages;
   }
 

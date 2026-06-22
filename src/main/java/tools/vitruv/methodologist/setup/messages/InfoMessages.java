@@ -26,6 +26,8 @@ public final class InfoMessages {
   public static final String FOREIGN_MODEL_ADDED = "Added missing foreignModel entry: %s";
   public static final String FOREIGN_MODEL_WOULD_ADD = "Would add missing foreignModel entry: %s";
   public static final String UNNAMED_PACKAGE = "<unnamed GenPackage>";
+  public static final String EMF_CLASSES_INIT_SUCCESS =
+      "Initialized {} EMF packages from classes directory";
 
   private InfoMessages() {
     throw new UnsupportedOperationException("This is a utility class and cannot be instantiated");
