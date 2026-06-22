@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -139,7 +140,7 @@ class VsumControllerTest {
 
   /** Verifies the jar endpoint returns the jar bytes with the expected download headers. */
   @Test
-  void buildJarReturnsJarResponse() {
+  void buildJarReturnsJarResponse() throws NoSuchFileException {
     VsumProjectBuildService buildService = mock(VsumProjectBuildService.class);
     byte[] jar = {9, 8, 7};
     when(buildService.buildProjectJar(anyList(), anyList(), any())).thenReturn(jar);
@@ -158,8 +159,7 @@ class VsumControllerTest {
 
     assertEquals(200, response.getStatusCode().value());
     assertArrayEquals(jar, response.getBody());
-    assertEquals(
-        "application/java-archive", response.getHeaders().getContentType().toString());
+    assertEquals("application/java-archive", response.getHeaders().getContentType().toString());
     assertEquals(jar.length, response.getHeaders().getContentLength());
     assertEquals(
         "tools.vitruv.methodologisttemplate.vsum-0.1.0-SNAPSHOT-jar-with-dependencies.jar",

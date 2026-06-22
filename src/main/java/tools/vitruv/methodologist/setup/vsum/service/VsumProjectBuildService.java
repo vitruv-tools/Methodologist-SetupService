@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -46,13 +45,11 @@ public class VsumProjectBuildService {
    * @param genmodelFiles genmodel files in the same order as metamodel files
    * @param reactionFiles reaction files
    * @return built project archive bytes
-   * @throws NoSuchFileException when the build does not produce the expected artifact
    */
   public byte[] buildProjectArchive(
       List<MultipartFile> metamodelFiles,
       List<MultipartFile> genmodelFiles,
-      List<MultipartFile> reactionFiles)
-      throws NoSuchFileException {
+      List<MultipartFile> reactionFiles) {
     return buildArtifact(
         metamodelFiles, genmodelFiles, reactionFiles, vsumService::generateProjectArchive);
   }
@@ -66,13 +63,11 @@ public class VsumProjectBuildService {
    * @param genmodelFiles genmodel files in the same order as metamodel files
    * @param reactionFiles reaction files
    * @return the bytes of the built VSUM jar
-   * @throws NoSuchFileException when the build does not produce the expected jar
    */
   public byte[] buildProjectJar(
       List<MultipartFile> metamodelFiles,
       List<MultipartFile> genmodelFiles,
-      List<MultipartFile> reactionFiles)
-      throws NoSuchFileException {
+      List<MultipartFile> reactionFiles) {
     return buildArtifact(
         metamodelFiles, genmodelFiles, reactionFiles, vsumService::generateProjectJar);
   }
@@ -87,14 +82,12 @@ public class VsumProjectBuildService {
    * @param reactionFiles reaction files
    * @param generator the VSUM generation strategy producing the artifact bytes
    * @return the produced artifact bytes
-   * @throws NoSuchFileException when the expected build artifact is missing
    */
   private byte[] buildArtifact(
       List<MultipartFile> metamodelFiles,
       List<MultipartFile> genmodelFiles,
       List<MultipartFile> reactionFiles,
-      ProjectArtifactGenerator generator)
-      throws NoSuchFileException {
+      ProjectArtifactGenerator generator) {
     validateInputs(metamodelFiles, genmodelFiles, reactionFiles);
 
     Path uploadWorkspace = null;
@@ -106,8 +99,6 @@ public class VsumProjectBuildService {
       normalizeReactionImports(modelPairs, copiedReactionFiles);
       Map<String, String> metamodelNamespaceMap = extractMetamodelNamespaceMap(modelPairs);
       return generator.generate(modelPairs, copiedReactionFiles, metamodelNamespaceMap);
-    } catch (NoSuchFileException e) {
-      throw e;
     } catch (IOException | MissingModelException e) {
       throw new MethodologistSetupException(
           VSUM_BUILD_ERROR_CODE, "Failed to build VSUM project archive", e);

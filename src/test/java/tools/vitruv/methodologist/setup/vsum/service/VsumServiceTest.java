@@ -169,8 +169,7 @@ class VsumServiceTest {
     stubProjectGeneration(service, jarBytes);
 
     byte[] result =
-        service.generateProjectJar(
-            List.of(modelFiles), List.of(), Map.of("pcm", "http://pcm/ns"));
+        service.generateProjectJar(List.of(modelFiles), List.of(), Map.of("pcm", "http://pcm/ns"));
 
     assertThat(result).isEqualTo(jarBytes);
     verify(service).runMavenBuild(any(Path.class), eq(Map.of("pcm", "http://pcm/ns")));

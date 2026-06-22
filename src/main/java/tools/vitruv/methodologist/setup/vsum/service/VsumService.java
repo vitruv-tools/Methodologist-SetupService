@@ -98,8 +98,8 @@ public class VsumService {
   }
 
   /**
-   * Generates a full VSUM project, builds it with Maven, and returns only the executable VSUM jar as
-   * bytes.
+   * Generates a full VSUM project, builds it with Maven, and returns only the executable VSUM jar
+   * as bytes.
    *
    * @param modelFiles paired metamodel/genmodel files
    * @param reactionFiles optional reaction files
