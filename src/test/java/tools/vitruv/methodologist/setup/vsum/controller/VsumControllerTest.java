@@ -1,11 +1,13 @@
 package tools.vitruv.methodologist.setup.vsum.controller;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -16,6 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockMultipartFile;
 import tools.vitruv.methodologist.setup.exception.MethodologistSetupException;
 import tools.vitruv.methodologist.setup.vsum.service.VsumProjectBuildService;
@@ -41,10 +44,13 @@ class VsumControllerTest {
     MockMultipartFile genmodel =
         new MockMultipartFile(
             "genmodelFiles", "model.genmodel", "application/octet-stream", "gen".getBytes());
+    MockMultipartFile reaction =
+        new MockMultipartFile(
+            "reactionFiles", "rules.reactions", "text/plain", "import \"x\"".getBytes());
 
     byte[] result =
         vsumProjectBuildService.buildProjectArchive(
-            List.of(metamodel), List.of(genmodel), List.of());
+            List.of(metamodel), List.of(genmodel), List.of(reaction));
 
     assertArrayEquals(archive, result);
     verify(vsumService).generateProjectArchive(anyList(), anyList(), any());
@@ -101,5 +107,64 @@ class VsumControllerTest {
         List.of(metamodel), List.of(genmodel), List.of(reactionFile));
 
     verify(vsumService).generateProjectArchive(anyList(), anyList(), any());
+  }
+
+  /** Verifies the build endpoint returns the zip archive with the expected download headers. */
+  @Test
+  void buildProjectReturnsZipResponse() throws Exception {
+    VsumProjectBuildService buildService = mock(VsumProjectBuildService.class);
+    byte[] archive = {1, 2, 3, 4};
+    when(buildService.buildProjectArchive(anyList(), anyList(), anyList())).thenReturn(archive);
+
+    VsumController controller = new VsumController(buildService);
+
+    MockMultipartFile metamodel =
+        new MockMultipartFile(
+            "metamodelFiles", "model.ecore", "application/octet-stream", "meta".getBytes());
+    MockMultipartFile genmodel =
+        new MockMultipartFile(
+            "genmodelFiles", "model.genmodel", "application/octet-stream", "gen".getBytes());
+
+    ResponseEntity<byte[]> response =
+        controller.buildProject(List.of(metamodel), List.of(genmodel), List.of());
+
+    assertEquals(200, response.getStatusCode().value());
+    assertArrayEquals(archive, response.getBody());
+    assertEquals("application/zip", response.getHeaders().getContentType().toString());
+    assertEquals(archive.length, response.getHeaders().getContentLength());
+    String filename = response.getHeaders().getContentDisposition().getFilename();
+    assertTrue(filename.startsWith("vsum-project-"));
+    assertTrue(filename.endsWith(".zip"));
+  }
+
+  /** Verifies the jar endpoint returns the jar bytes with the expected download headers. */
+  @Test
+  void buildJarReturnsJarResponse() {
+    VsumProjectBuildService buildService = mock(VsumProjectBuildService.class);
+    byte[] jar = {9, 8, 7};
+    when(buildService.buildProjectJar(anyList(), anyList(), any())).thenReturn(jar);
+
+    VsumController controller = new VsumController(buildService);
+
+    MockMultipartFile metamodel =
+        new MockMultipartFile(
+            "metamodelFiles", "model.ecore", "application/octet-stream", "meta".getBytes());
+    MockMultipartFile genmodel =
+        new MockMultipartFile(
+            "genmodelFiles", "model.genmodel", "application/octet-stream", "gen".getBytes());
+
+    ResponseEntity<byte[]> response =
+        controller.buildJar(List.of(metamodel), List.of(genmodel), null);
+
+    assertEquals(200, response.getStatusCode().value());
+    assertArrayEquals(jar, response.getBody());
+    assertEquals(
+        "application/java-archive", response.getHeaders().getContentType().toString());
+    assertEquals(jar.length, response.getHeaders().getContentLength());
+    assertEquals(
+        "tools.vitruv.methodologisttemplate.vsum-0.1.0-SNAPSHOT-jar-with-dependencies.jar",
+        response.getHeaders().getContentDisposition().getFilename());
+
+    verify(buildService).buildProjectJar(anyList(), anyList(), any());
   }
 }

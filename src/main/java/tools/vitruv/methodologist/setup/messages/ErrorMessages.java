@@ -18,6 +18,10 @@ public final class ErrorMessages {
   public static final String MULTIPART_FILE_UPLOAD_ERROR = "Failed to save uploaded file";
   public static final String XML_STREAM_ERROR = "Failed to process XML stream";
   public static final String UNEXPECTED_ERROR = "An unexpected error occurred";
+  public static final String VSUM_JAR_NOT_FOUND =
+      "Expected VSUM jar was not produced by the build: %s";
+  public static final String VSUM_REACTION_FILES_REQUIRED =
+      "At least one reaction file is required";
 
   private ErrorMessages() {
     throw new UnsupportedOperationException("This is a utility class and cannot be instantiated");

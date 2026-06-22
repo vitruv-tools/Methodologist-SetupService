@@ -156,6 +156,82 @@ class VsumServiceTest {
   }
 
   @Test
+  void generateProjectJar_shouldReturnBuiltJarBytes() throws Exception {
+
+    File ecore = writeValidEcore();
+    File genmodel = writeValidGenmodel();
+
+    VsumService.ModelFiles modelFiles = new VsumService.ModelFiles(ecore, genmodel);
+
+    VsumService service = spy(new VsumService(generateFromTemplate));
+
+    byte[] jarBytes = {10, 20, 30, 40};
+    stubProjectGeneration(service, jarBytes);
+
+    byte[] result =
+        service.generateProjectJar(
+            List.of(modelFiles), List.of(), Map.of("pcm", "http://pcm/ns"));
+
+    assertThat(result).isEqualTo(jarBytes);
+    verify(service).runMavenBuild(any(Path.class), eq(Map.of("pcm", "http://pcm/ns")));
+  }
+
+  @Test
+  void generateProjectJar_shouldThrowWhenJarMissing() throws Exception {
+
+    File ecore = writeValidEcore();
+    File genmodel = writeValidGenmodel();
+
+    VsumService.ModelFiles modelFiles = new VsumService.ModelFiles(ecore, genmodel);
+
+    VsumService service = spy(new VsumService(generateFromTemplate));
+
+    doAnswer(
+            invocation -> {
+              Path workspace = ((File) invocation.getArgument(0)).toPath().getParent().getParent();
+              Files.createDirectories(workspace);
+              return null;
+            })
+        .when(generateFromTemplate)
+        .generateRootPom(any(File.class), anyString());
+    doNothing().when(service).runMavenBuild(any(Path.class), anyMap());
+
+    assertThatThrownBy(() -> service.generateProjectJar(List.of(modelFiles), List.of()))
+        .isInstanceOf(java.nio.file.NoSuchFileException.class)
+        .hasMessageContaining("jar-with-dependencies.jar");
+  }
+
+  @Test
+  void generateProjectJar_shouldDelegateToThreeArgumentMethod() throws Exception {
+
+    File ecore = mock(File.class);
+    File genmodel = mock(File.class);
+
+    VsumService.ModelFiles modelFiles = new VsumService.ModelFiles(ecore, genmodel);
+
+    VsumService service = spy(new VsumService(generateFromTemplate));
+
+    byte[] expected = {4, 5, 6};
+
+    doReturn(expected)
+        .when(service)
+        .generateProjectJar(eq(List.of(modelFiles)), eq(List.of()), eq(Map.of()));
+
+    byte[] result = service.generateProjectJar(List.of(modelFiles), List.of());
+
+    assertThat(result).isEqualTo(expected);
+  }
+
+  @Test
+  void generateProjectJar_shouldThrowWhenModelFilesNull() {
+    VsumService service = spy(new VsumService(generateFromTemplate));
+
+    assertThatThrownBy(() -> service.generateProjectJar(null, List.of()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("At least one metamodel/genmodel pair");
+  }
+
+  @Test
   void modelFiles_shouldRejectNullMetamodel() {
     File genmodel = new File("test.genmodel");
 
@@ -208,5 +284,59 @@ class VsumServiceTest {
         .contains("-Dmetamodel.uml.nsuri=http://uml");
 
     assertThat(builder.directory()).isEqualTo(tempDir.toFile());
+  }
+
+  private File writeValidGenmodel() throws IOException {
+    File genmodel = Files.createFile(tempDir.resolve("model.genmodel")).toFile();
+    Files.writeString(
+        genmodel.toPath(),
+        """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <genmodel:GenModel
+                xmlns:xmi="http://www.omg.org/XMI"
+                xmlns:genmodel="http://www.eclipse.org/emf/2002/GenModel"
+                modelDirectory="/test/src"
+                modelPluginID="test"
+                importerID="org.eclipse.emf.importer.ecore">
+            </genmodel:GenModel>
+            """);
+    return genmodel;
+  }
+
+  private File writeValidEcore() throws IOException {
+    File ecore = Files.createFile(tempDir.resolve("model.ecore")).toFile();
+    Files.writeString(
+        ecore.toPath(),
+        """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <ecore:EPackage
+                xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore"
+                name="pcm"
+                nsURI="http://pcm"
+                nsPrefix="pcm"/>
+            """);
+    return ecore;
+  }
+
+  /**
+   * Stubs project generation so that invoking the root POM generator materializes the expected VSUM
+   * jar inside the workspace, and skips the real Maven build.
+   *
+   * @param service the spied service whose Maven build should be stubbed
+   * @param jarBytes the bytes to write as the built VSUM jar
+   * @throws Exception when stubbing fails
+   */
+  private void stubProjectGeneration(VsumService service, byte[] jarBytes) throws Exception {
+    doAnswer(
+            invocation -> {
+              Path workspace = ((File) invocation.getArgument(0)).toPath().getParent();
+              Path jar = workspace.resolve(VsumService.VSUM_JAR_RELATIVE_PATH);
+              Files.createDirectories(jar.getParent());
+              Files.write(jar, jarBytes);
+              return null;
+            })
+        .when(generateFromTemplate)
+        .generateRootPom(any(File.class), anyString());
+    doNothing().when(service).runMavenBuild(any(Path.class), anyMap());
   }
 }
