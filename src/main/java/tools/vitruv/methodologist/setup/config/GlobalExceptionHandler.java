@@ -1,5 +1,6 @@
 package tools.vitruv.methodologist.setup.config;
 
+import java.nio.file.NoSuchFileException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -67,6 +68,30 @@ public class GlobalExceptionHandler {
             .build();
 
     return new ResponseEntity<>(errorResponse, HttpStatus.UNPROCESSABLE_ENTITY);
+  }
+
+  /**
+   * Handles NoSuchFileException raised when an expected build artifact is missing.
+   *
+   * @param ex the exception
+   * @param request the web request
+   * @return error response with bad request status
+   */
+  @ExceptionHandler(NoSuchFileException.class)
+  public ResponseEntity<ErrorResponseDTO> handleNoSuchFileException(
+      NoSuchFileException ex, WebRequest request) {
+    log.error("NoSuchFileException occurred: {}", ex.getMessage(), ex);
+
+    ErrorResponseDTO errorResponse =
+        ErrorResponseDTO.builder()
+            .errorCode("VSUM_ARTIFACT_NOT_FOUND")
+            .message(ex.getMessage())
+            .status(HttpStatus.BAD_REQUEST.value())
+            .timestamp(System.currentTimeMillis())
+            .path(request.getDescription(false).replace("uri=", ""))
+            .build();
+
+    return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
   }
 
   /**
