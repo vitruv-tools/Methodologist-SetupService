@@ -36,11 +36,7 @@ public class GlobalExceptionHandler {
     log.error("MethodologistSetupException occurred: {}", ex.getMessage(), ex);
 
     writeErrorResponse(
-        response,
-        request,
-        HttpStatus.BAD_REQUEST,
-        ex.getErrorCode(),
-        ex.getMessage());
+        response, request, HttpStatus.BAD_REQUEST, ex.getErrorCode(), ex.getMessage());
   }
 
   /**
@@ -56,11 +52,7 @@ public class GlobalExceptionHandler {
     log.error("GenmodelException occurred: {}", ex.getMessage(), ex);
 
     writeErrorResponse(
-        response,
-        request,
-        HttpStatus.UNPROCESSABLE_ENTITY,
-        ex.getErrorCode(),
-        ex.getMessage());
+        response, request, HttpStatus.UNPROCESSABLE_ENTITY, ex.getErrorCode(), ex.getMessage());
   }
 
   /**
@@ -76,11 +68,7 @@ public class GlobalExceptionHandler {
     log.error("NoSuchFileException occurred: {}", ex.getMessage(), ex);
 
     writeErrorResponse(
-        response,
-        request,
-        HttpStatus.BAD_REQUEST,
-        "VSUM_ARTIFACT_NOT_FOUND",
-        ex.getMessage());
+        response, request, HttpStatus.BAD_REQUEST, "VSUM_ARTIFACT_NOT_FOUND", ex.getMessage());
   }
 
   /**
