@@ -55,7 +55,8 @@ class VsumProjectBuildServiceTest {
                     List.of(mockMultipart("a.genmodel")),
                     List.of()))
         .isInstanceOf(MethodologistSetupException.class)
-        .hasMessageContaining("counts must be identical");
+        .hasMessageContaining("Please upload the same number of metamodel and genmodel files")
+        .hasMessageContaining("received 2 metamodel file(s) and 1 genmodel file(s)");
   }
 
   @Test
@@ -202,7 +203,8 @@ class VsumProjectBuildServiceTest {
                     List.of(mockMultipart("a.genmodel")),
                     List.of()))
         .isInstanceOf(MethodologistSetupException.class)
-        .hasMessageContaining("counts must be identical");
+        .hasMessageContaining("Please upload the same number of metamodel and genmodel files")
+        .hasMessageContaining("received 2 metamodel file(s) and 1 genmodel file(s)");
   }
 
   @Test
