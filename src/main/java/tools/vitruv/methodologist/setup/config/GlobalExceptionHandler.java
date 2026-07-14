@@ -1,13 +1,14 @@
 package tools.vitruv.methodologist.setup.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.nio.file.NoSuchFileException;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.context.request.WebRequest;
 import tools.vitruv.methodologist.setup.exception.ErrorResponseDTO;
 import tools.vitruv.methodologist.setup.exception.GenmodelException;
 import tools.vitruv.methodologist.setup.exception.MethodologistSetupException;
@@ -19,31 +20,23 @@ import tools.vitruv.methodologist.setup.messages.ErrorMessages;
  */
 @Slf4j
 @RestControllerAdvice(basePackages = "tools.vitruv.methodologist.setup")
-@RequiredArgsConstructor
 public class GlobalExceptionHandler {
+  private final ObjectMapper objectMapper = new ObjectMapper();
 
   /**
    * Handles MethodologistSetupException.
    *
    * @param ex the exception
    * @param request the web request
-   * @return error response
    */
   @ExceptionHandler(MethodologistSetupException.class)
-  public ResponseEntity<ErrorResponseDTO> handleMethodologistSetupException(
-      MethodologistSetupException ex, WebRequest request) {
+  public void handleMethodologistSetupException(
+      MethodologistSetupException ex, HttpServletRequest request, HttpServletResponse response)
+      throws IOException {
     log.error("MethodologistSetupException occurred: {}", ex.getMessage(), ex);
 
-    ErrorResponseDTO errorResponse =
-        ErrorResponseDTO.builder()
-            .errorCode(ex.getErrorCode())
-            .message(ex.getMessage())
-            .status(HttpStatus.BAD_REQUEST.value())
-            .timestamp(System.currentTimeMillis())
-            .path(request.getDescription(false).replace("uri=", ""))
-            .build();
-
-    return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    writeErrorResponse(
+        response, request, HttpStatus.BAD_REQUEST, ex.getErrorCode(), ex.getMessage());
   }
 
   /**
@@ -51,23 +44,15 @@ public class GlobalExceptionHandler {
    *
    * @param ex the exception
    * @param request the web request
-   * @return error response
    */
   @ExceptionHandler(GenmodelException.class)
-  public ResponseEntity<ErrorResponseDTO> handleGenmodelException(
-      GenmodelException ex, WebRequest request) {
+  public void handleGenmodelException(
+      GenmodelException ex, HttpServletRequest request, HttpServletResponse response)
+      throws IOException {
     log.error("GenmodelException occurred: {}", ex.getMessage(), ex);
 
-    ErrorResponseDTO errorResponse =
-        ErrorResponseDTO.builder()
-            .errorCode(ex.getErrorCode())
-            .message(ex.getMessage())
-            .status(HttpStatus.UNPROCESSABLE_ENTITY.value())
-            .timestamp(System.currentTimeMillis())
-            .path(request.getDescription(false).replace("uri=", ""))
-            .build();
-
-    return new ResponseEntity<>(errorResponse, HttpStatus.UNPROCESSABLE_ENTITY);
+    writeErrorResponse(
+        response, request, HttpStatus.UNPROCESSABLE_ENTITY, ex.getErrorCode(), ex.getMessage());
   }
 
   /**
@@ -75,23 +60,15 @@ public class GlobalExceptionHandler {
    *
    * @param ex the exception
    * @param request the web request
-   * @return error response with bad request status
    */
   @ExceptionHandler(NoSuchFileException.class)
-  public ResponseEntity<ErrorResponseDTO> handleNoSuchFileException(
-      NoSuchFileException ex, WebRequest request) {
+  public void handleNoSuchFileException(
+      NoSuchFileException ex, HttpServletRequest request, HttpServletResponse response)
+      throws IOException {
     log.error("NoSuchFileException occurred: {}", ex.getMessage(), ex);
 
-    ErrorResponseDTO errorResponse =
-        ErrorResponseDTO.builder()
-            .errorCode("VSUM_ARTIFACT_NOT_FOUND")
-            .message(ex.getMessage())
-            .status(HttpStatus.BAD_REQUEST.value())
-            .timestamp(System.currentTimeMillis())
-            .path(request.getDescription(false).replace("uri=", ""))
-            .build();
-
-    return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    writeErrorResponse(
+        response, request, HttpStatus.BAD_REQUEST, "VSUM_ARTIFACT_NOT_FOUND", ex.getMessage());
   }
 
   /**
@@ -99,21 +76,39 @@ public class GlobalExceptionHandler {
    *
    * @param ex the exception
    * @param request the web request
-   * @return error response
    */
   @ExceptionHandler(Exception.class)
-  public ResponseEntity<ErrorResponseDTO> handleGlobalException(Exception ex, WebRequest request) {
+  public void handleGlobalException(
+      Exception ex, HttpServletRequest request, HttpServletResponse response) throws IOException {
     log.error("Unexpected exception occurred: {}", ex.getMessage(), ex);
 
+    writeErrorResponse(
+        response,
+        request,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        "INTERNAL_ERROR",
+        ErrorMessages.UNEXPECTED_ERROR);
+  }
+
+  private void writeErrorResponse(
+      HttpServletResponse response,
+      HttpServletRequest request,
+      HttpStatus status,
+      String errorCode,
+      String message)
+      throws IOException {
     ErrorResponseDTO errorResponse =
         ErrorResponseDTO.builder()
-            .errorCode("INTERNAL_ERROR")
-            .message(ErrorMessages.UNEXPECTED_ERROR)
-            .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
+            .errorCode(errorCode)
+            .message(message)
+            .status(status.value())
             .timestamp(System.currentTimeMillis())
-            .path(request.getDescription(false).replace("uri=", ""))
+            .path(request.getRequestURI())
             .build();
 
-    return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
+    response.setStatus(status.value());
+    response.setCharacterEncoding("UTF-8");
+    response.setContentType("application/json");
+    response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
   }
 }

@@ -100,12 +100,14 @@ public class VsumProjectBuildService {
       Map<String, String> metamodelNamespaceMap = extractMetamodelNamespaceMap(modelPairs);
       return generator.generate(modelPairs, copiedReactionFiles, metamodelNamespaceMap);
     } catch (IOException | MissingModelException e) {
+      String reason = e.getMessage() != null ? e.getMessage() : e.toString();
       throw new MethodologistSetupException(
-          VSUM_BUILD_ERROR_CODE, "Failed to build VSUM project archive", e);
+          VSUM_BUILD_ERROR_CODE, "Failed to build VSUM project archive: " + reason, e);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
+      String reason = e.getMessage() != null ? e.getMessage() : e.toString();
       throw new MethodologistSetupException(
-          VSUM_BUILD_ERROR_CODE, "VSUM project build was interrupted", e);
+          VSUM_BUILD_ERROR_CODE, "VSUM project build was interrupted: " + reason, e);
     } finally {
       deleteRecursively(uploadWorkspace);
     }
@@ -134,7 +136,10 @@ public class VsumProjectBuildService {
     if (metamodelFiles.size() != genmodelFiles.size()) {
       throw new MethodologistSetupException(
           VSUM_INPUT_ERROR_CODE,
-          "Metamodel and genmodel file counts must be identical to build file pairs");
+          String.format(
+              "Please upload the same number of metamodel and genmodel files "
+                  + "(received %d metamodel file(s) and %d genmodel file(s)).",
+              metamodelFiles.size(), genmodelFiles.size()));
     }
 
     for (MultipartFile file : metamodelFiles) {
