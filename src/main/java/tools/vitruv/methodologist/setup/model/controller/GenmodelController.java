@@ -156,6 +156,6 @@ public class GenmodelController {
         originalFilename.contains(".")
             ? originalFilename.substring(0, originalFilename.lastIndexOf("."))
             : originalFilename;
-    return nameWithoutExt + "_processed.genmodel";
+    return nameWithoutExt + ".genmodel";
   }
 }
