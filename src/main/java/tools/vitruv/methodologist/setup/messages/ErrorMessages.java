@@ -26,6 +26,13 @@ public final class ErrorMessages {
   public static final String EMF_CLASSES_LOAD_PACKAGE_ERROR = "Could not load package from {}: {}";
   public static final String EMF_CLASSES_INIT_ERROR =
       "Error initializing EMF packages from classes directory: {}";
+  public static final String ECORE_FILE_NOT_FOUND = "ECore file not found: %s";
+  public static final String ECORE_FILE_INVALID_FORMAT = "Not a valid ECore file: %s";
+  public static final String ECORE_FILE_READ_ERROR = "Could not read ecore file: %s";
+  public static final String GENMODEL_GENERATION_ERROR =
+      "Failed to generate genmodel from ecore file: %s";
+  public static final String GENMODEL_GENERATION_NS_URI_ERROR =
+      "Could not determine namespace URI from ecore file";
 
   private ErrorMessages() {
     throw new UnsupportedOperationException("This is a utility class and cannot be instantiated");
