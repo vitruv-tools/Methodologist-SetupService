@@ -211,7 +211,8 @@ public class EcoreToGenmodelService {
       Map<String, Object> options = new HashMap<>();
       options.put(XMLResource.OPTION_ENCODING, "UTF-8");
       // Serialize cross-document references (ecorePackage/ecoreClass/ecoreFeature) in the flat
-      // attribute style used by canonical genmodel files, e.g. ecoreClass="model.ecore#//Component".
+      // attribute style used by canonical genmodel files, e.g.
+      // ecoreClass="model.ecore#//Component".
       options.put(XMLResource.OPTION_USE_ENCODED_ATTRIBUTE_STYLE, Boolean.TRUE);
 
       ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
