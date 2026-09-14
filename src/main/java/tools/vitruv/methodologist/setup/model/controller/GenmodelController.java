@@ -22,6 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
 import tools.vitruv.methodologist.setup.ResponseTemplateDto;
 import tools.vitruv.methodologist.setup.messages.InfoMessages;
 import tools.vitruv.methodologist.setup.model.controller.dto.request.GenmodelIssueDTO;
+import tools.vitruv.methodologist.setup.model.service.EcoreToGenmodelService;
 import tools.vitruv.methodologist.setup.model.service.GenmodelFileService;
 import tools.vitruv.methodologist.setup.model.service.GenmodelPrecheckService;
 import tools.vitruv.methodologist.setup.model.service.GenmodelPrecheckService.GenmodelIssue;
@@ -36,18 +37,23 @@ public class GenmodelController {
 
   private final GenmodelPrecheckService genmodelPrecheckService;
   private final GenmodelFileService genmodelFileService;
+  private final EcoreToGenmodelService ecoreToGenmodelService;
 
   /**
    * Constructs a GenmodelController with the required services.
    *
    * @param genmodelPrecheckService the genmodel precheck service
    * @param genmodelFileService the genmodel file service
+   * @param ecoreToGenmodelService the ecore to genmodel service
    */
   @Autowired
   public GenmodelController(
-      GenmodelPrecheckService genmodelPrecheckService, GenmodelFileService genmodelFileService) {
+      GenmodelPrecheckService genmodelPrecheckService,
+      GenmodelFileService genmodelFileService,
+      EcoreToGenmodelService ecoreToGenmodelService) {
     this.genmodelPrecheckService = genmodelPrecheckService;
     this.genmodelFileService = genmodelFileService;
+    this.ecoreToGenmodelService = ecoreToGenmodelService;
   }
 
   /**
@@ -130,6 +136,50 @@ public class GenmodelController {
   }
 
   /**
+   * Generates a GenModel from an ECore file.
+   *
+   * @param file the ECore file to convert
+   * @return the generated GenModel file as a downloadable attachment
+   */
+  @PostMapping(value = "/generate", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @Operation(
+      summary = "Generate GenModel from ECore file",
+      description = "Convert an ECore metamodel file to a GenModel with standard configuration",
+      responses = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "GenModel generated successfully",
+            content = @Content(mediaType = "application/octet-stream")),
+        @ApiResponse(responseCode = "400", description = "Invalid ECore file"),
+        @ApiResponse(responseCode = "500", description = "Server error")
+      })
+  public ResponseEntity<byte[]> generate(
+      @Parameter(
+              description = "The ECore file to generate GenModel from",
+              required = true,
+              schema = @Schema(type = "string", format = "binary"))
+          @RequestPart("file")
+          MultipartFile file) {
+
+    log.info("Generating GenModel from ECore file: {}", file.getOriginalFilename());
+
+    byte[] ecoreFileBytes = genmodelFileService.multipartToBytes(file);
+    byte[] genmodelContent =
+        ecoreToGenmodelService.generateGenmodelFromEcore(
+            ecoreFileBytes, file.getOriginalFilename());
+
+    String genmodelFilename = generateGenmodelFilename(file.getOriginalFilename());
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+    headers.setContentDisposition(
+        ContentDisposition.attachment().filename(genmodelFilename).build());
+    headers.setContentLength(genmodelContent.length);
+
+    log.info("Returning generated GenModel file: {}", genmodelFilename);
+    return ResponseEntity.ok().headers(headers).body(genmodelContent);
+  }
+
+  /**
    * Converts GenmodelIssue objects to GenmodelIssueDTO objects.
    *
    * @param issues the list of issues to convert
@@ -156,6 +206,24 @@ public class GenmodelController {
         originalFilename.contains(".")
             ? originalFilename.substring(0, originalFilename.lastIndexOf("."))
             : originalFilename;
+    return nameWithoutExt + ".genmodel";
+  }
+
+  /**
+   * Generates a genmodel filename from an ecore filename.
+   *
+   * @param ecoreFilename the ecore filename
+   * @return the genmodel filename
+   */
+  private String generateGenmodelFilename(String ecoreFilename) {
+    if (ecoreFilename == null || ecoreFilename.isEmpty()) {
+      return "model.genmodel";
+    }
+
+    String nameWithoutExt =
+        ecoreFilename.contains(".")
+            ? ecoreFilename.substring(0, ecoreFilename.lastIndexOf("."))
+            : ecoreFilename;
     return nameWithoutExt + ".genmodel";
   }
 }

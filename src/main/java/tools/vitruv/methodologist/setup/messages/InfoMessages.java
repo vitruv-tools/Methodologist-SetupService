@@ -28,6 +28,8 @@ public final class InfoMessages {
   public static final String UNNAMED_PACKAGE = "<unnamed GenPackage>";
   public static final String EMF_CLASSES_INIT_SUCCESS =
       "Initialized {} EMF packages from classes directory";
+  public static final String GENMODEL_GENERATION_SUCCESS =
+      "GenModel generated successfully from ecore file";
 
   private InfoMessages() {
     throw new UnsupportedOperationException("This is a utility class and cannot be instantiated");
