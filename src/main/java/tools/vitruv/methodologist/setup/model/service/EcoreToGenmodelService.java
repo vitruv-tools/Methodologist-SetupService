@@ -159,7 +159,6 @@ public class EcoreToGenmodelService {
     }
 
     String modelId = deriveModelId(nsUri);
-    String modelName = capitalize(ePackage.getName());
 
     GenModel genModel = GenModelFactory.eINSTANCE.createGenModel();
     genModel.getForeignModel().add(ecoreName);
@@ -168,6 +167,7 @@ public class EcoreToGenmodelService {
     // standard defaults are applied afterwards to make sure they are honored.
     genModel.initialize(Collections.singleton(ePackage));
 
+    String modelName = capitalize(ePackage.getName());
     genModel.setModelDirectory("/" + modelId + "/target/generated-sources/ecore");
     genModel.setModelPluginID(modelId);
     genModel.setModelName(modelName);
