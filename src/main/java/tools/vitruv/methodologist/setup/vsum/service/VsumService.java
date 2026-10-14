@@ -312,14 +312,18 @@ public class VsumService {
     generateFromTemplate.generateEMFUtilsPom(
         new File((configuration.getLocalPath() + "/p2wrappers/emfutils/pom.xml").trim()),
         configuration.getPackageName());
+    List<String> changePropagationSpecifications =
+        configuration.getChangePropagationSpecifications();
     generateFromTemplate.generateVsumExample(
         new File((configuration.getLocalPath() + "/vsum/src/main/java/VSUMExample.java").trim()),
         configuration.getPackageName(),
-        configuration.getModelNames());
+        configuration.getModelNames(),
+        changePropagationSpecifications);
     generateFromTemplate.generateVsumTest(
         new File(
             (configuration.getLocalPath() + "/vsum/src/test/java/VSUMExampleTest.java").trim()),
-        configuration.getPackageName());
+        configuration.getPackageName(),
+        changePropagationSpecifications);
     generateFromTemplate.generateProjectFile(
         new File((configuration.getLocalPath() + "/model/.project").trim()),
         configuration.getPackageName());
@@ -331,7 +335,6 @@ public class VsumService {
         workflow, configuration.getMetaModelLocations(), configuration);
     generateFromTemplate.generatePlugin(
         new File((configuration.getLocalPath() + "/model/plugin.xml").trim()),
-        configuration,
         configuration.getMetaModelLocations());
   }
 

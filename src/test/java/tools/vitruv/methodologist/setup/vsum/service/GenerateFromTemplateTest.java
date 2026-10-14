@@ -29,6 +29,10 @@ import tools.vitruv.methodologist.setup.exception.MissingModelException;
 class GenerateFromTemplateTest {
 
   private static final String PACKAGE_NAME = "tools.vitruv.generated";
+  private static final String SPECIFICATION =
+      "mir.reactions.model2Model2.Model2Model2ChangePropagationSpecification";
+  private static final String MODEL_PACKAGE_CLASS =
+      "tools.vitruv.generated.model.model.ModelPackage";
 
   @TempDir Path tempDir;
 
@@ -73,7 +77,8 @@ class GenerateFromTemplateTest {
   private MetamodelLocation metamodelLocation(String modelDirectory) {
     File metamodel = tempDir.resolve("model.ecore").toFile();
     File genmodel = tempDir.resolve("model.genmodel").toFile();
-    return new MetamodelLocation(metamodel, genmodel, "http://example.org/model", modelDirectory);
+    return new MetamodelLocation(
+        metamodel, genmodel, "http://example.org/model", modelDirectory, MODEL_PACKAGE_CLASS);
   }
 
   /** Verifies the placeholder for the unused private field assertion utility. */
@@ -228,9 +233,13 @@ class GenerateFromTemplateTest {
     void rendersVsumTest() throws Exception {
       Path target = tempDir.resolve("vsum/src/test/java/VSUMExampleTest.java");
 
-      generator.generateVsumTest(target.toFile(), PACKAGE_NAME);
+      generator.generateVsumTest(target.toFile(), PACKAGE_NAME, List.of(SPECIFICATION));
 
-      assertTrue(read(target).contains("package " + PACKAGE_NAME + ".vsum;"));
+      String content = read(target);
+      assertTrue(content.contains("package " + PACKAGE_NAME + ".vsum;"));
+      assertTrue(
+          content.contains(".withChangePropagationSpecifications(new " + SPECIFICATION + "())"));
+      assertFalse(content.contains("ModelFactory"));
     }
 
     /** Verifies the Eclipse {@code .project} file is rendered with the package name. */
@@ -255,10 +264,12 @@ class GenerateFromTemplateTest {
     void rendersViewTypesPerModel() throws Exception {
       Path target = tempDir.resolve("vsum/src/main/java/VSUMExample.java");
 
-      generator.generateVsumExample(target.toFile(), PACKAGE_NAME, List.of("Alpha", "Beta"));
+      generator.generateVsumExample(
+          target.toFile(), PACKAGE_NAME, List.of("Alpha", "Beta"), List.of(SPECIFICATION));
 
       String content = read(target);
       assertTrue(content.contains("package " + PACKAGE_NAME + ".vsum;"));
+      assertFalse(content.contains("ModelFactory"));
       assertTrue(content.contains("createIdentityMappingViewType(\"Alpha\")"));
       assertTrue(content.contains("createIdentityMappingViewType(\"Beta\")"));
     }
@@ -269,9 +280,30 @@ class GenerateFromTemplateTest {
     void rendersWithEmptyModelList() throws Exception {
       Path target = tempDir.resolve("vsum/src/main/java/VSUMExample.java");
 
-      generator.generateVsumExample(target.toFile(), PACKAGE_NAME, List.of());
+      generator.generateVsumExample(target.toFile(), PACKAGE_NAME, List.of(), List.of());
 
       assertTrue(read(target).contains("class VSUMExample"));
+    }
+
+    /** Verifies every change propagation specification of the project is registered. */
+    @Test
+    @DisplayName("Should register every change propagation specification")
+    void registersChangePropagationSpecifications() throws Exception {
+      Path target = tempDir.resolve("vsum/src/main/java/VSUMExample.java");
+
+      generator.generateVsumExample(
+          target.toFile(),
+          PACKAGE_NAME,
+          List.of("Alpha"),
+          List.of("mir.reactions.a.AChangePropagationSpecification", SPECIFICATION));
+
+      assertTrue(
+          read(target)
+              .contains(
+                  ".withChangePropagationSpecifications(new"
+                      + " mir.reactions.a.AChangePropagationSpecification(), new "
+                      + SPECIFICATION
+                      + "())"));
     }
   }
 
@@ -315,19 +347,18 @@ class GenerateFromTemplateTest {
   @DisplayName("generatePlugin")
   class GeneratePlugin {
 
-    /** Verifies the plugin descriptor embeds the model URI, package and capitalized model name. */
+    /** Verifies the plugin descriptor registers the package class under the metamodel nsURI. */
     @Test
     @DisplayName("Should render an extension per metamodel location")
     void rendersExtensionPerModel() throws Exception {
       Path target = tempDir.resolve("model/plugin.xml");
-      VitruvConfiguration config = configuration();
       List<MetamodelLocation> models = List.of(metamodelLocation("src/main/ecore"));
 
-      generator.generatePlugin(target.toFile(), config, models);
+      generator.generatePlugin(target.toFile(), models);
 
       String content = read(target);
-      assertTrue(content.contains("http://example.org/model"));
-      assertTrue(content.contains(PACKAGE_NAME + ".model.model.ModelPackage"));
+      assertTrue(content.contains("uri=\"http://example.org/model\""));
+      assertTrue(content.contains("class=\"" + MODEL_PACKAGE_CLASS + "\""));
       assertTrue(content.contains("src/main/ecore/model.genmodel"));
     }
 
@@ -337,7 +368,7 @@ class GenerateFromTemplateTest {
     void rendersEmptyPlugin() throws Exception {
       Path target = tempDir.resolve("model/plugin.xml");
 
-      generator.generatePlugin(target.toFile(), configuration(), List.of());
+      generator.generatePlugin(target.toFile(), List.of());
 
       assertTrue(read(target).contains("<plugin>"));
     }

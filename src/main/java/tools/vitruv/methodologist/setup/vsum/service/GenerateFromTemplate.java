@@ -24,6 +24,7 @@ import tools.vitruv.methodologist.setup.util.FileUtils;
 @Service
 public class GenerateFromTemplate {
   private static final String PACKAGE_NAME = "packageName";
+  private static final String CHANGE_PROPAGATION_SPECIFICATIONS = "changePropagationSpecifications";
 
   /** Constructor. */
   public GenerateFromTemplate() {}
@@ -104,15 +105,22 @@ public class GenerateFromTemplate {
    *
    * @param filePath The file path to write the vsum example file to.
    * @param packageName The package name from the genmodel.
+   * @param models The model names to create view types for.
+   * @param changePropagationSpecifications The change propagation specification class names.
    * @throws java.io.IOException If the file cannot be written.
    */
-  public void generateVsumExample(File filePath, String packageName, List<String> models)
+  public void generateVsumExample(
+      File filePath,
+      String packageName,
+      List<String> models,
+      List<String> changePropagationSpecifications)
       throws IOException {
     Configuration cfg = getConfiguration();
 
     Map<String, Object> data = new HashMap<>();
     data.put("packageName", packageName.trim());
     data.put("models", models);
+    data.put(CHANGE_PROPAGATION_SPECIFICATIONS, changePropagationSpecifications);
 
     Template template = loadTemplate(cfg, "vsumExample.ftl");
     writeTemplate(template, filePath, data);
@@ -191,13 +199,17 @@ public class GenerateFromTemplate {
    *
    * @param filePath The file path to write the vsum test file to.
    * @param packageName The package name from the genmodel.
+   * @param changePropagationSpecifications The change propagation specification class names.
    * @throws java.io.IOException If the file cannot be written.
    */
-  public void generateVsumTest(File filePath, String packageName) throws IOException {
+  public void generateVsumTest(
+      File filePath, String packageName, List<String> changePropagationSpecifications)
+      throws IOException {
     Configuration cfg = getConfiguration();
 
     Map<String, Object> data = new HashMap<>();
     data.put("packageName", packageName.trim());
+    data.put(CHANGE_PROPAGATION_SPECIFICATIONS, changePropagationSpecifications);
 
     Template template = loadTemplate(cfg, "vsumTest.ftl");
     writeTemplate(template, filePath, data);
@@ -292,31 +304,22 @@ public class GenerateFromTemplate {
   }
 
   /**
-   * Generates the plugin file.
+   * Generates the plugin file, registering each metamodel's generated package under its nsURI.
    *
    * @param filePath the file path to write the plugin file to.
-   * @param config the vitruv cli configuration.
    * @param models the list of metamodel locations.
    * @throws java.io.IOException If the file cannot be written.
    */
-  public void generatePlugin(
-      File filePath, VitruvConfiguration config, List<MetamodelLocation> models)
-      throws IOException {
+  public void generatePlugin(File filePath, List<MetamodelLocation> models) throws IOException {
     Configuration cfg = getConfiguration();
     List<Map<String, Object>> items = new ArrayList<>();
     for (MetamodelLocation model : models) {
       items.add(
           Map.of(
-              PACKAGE_NAME,
-              config.getPackageName(),
-              "modelUri",
-              model.genmodelUri(),
-              "modelNameCap",
-              model.genmodel().getName().substring(0, 1).toUpperCase()
-                  + model
-                      .genmodel()
-                      .getName()
-                      .substring(1, model.genmodel().getName().indexOf('.')),
+              "nsUri",
+              model.nsUri(),
+              "packageClassName",
+              model.packageClassName(),
               "genmodelName",
               model.genmodel().getName()));
     }
