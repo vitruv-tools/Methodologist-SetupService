@@ -1,14 +1,12 @@
 package ${packageName}.vsum;
 
 import tools.vitruv.framework.vsum.VirtualModelBuilder;
-import ${packageName}.model.model.ModelFactory;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
 import java.nio.file.Path;
 import java.util.function.Consumer;
-import mir.reactions.model2Model2.Model2Model2ChangePropagationSpecification;
 import tools.vitruv.change.testutils.TestUserInteraction;
 import tools.vitruv.framework.views.CommittableView;
 import tools.vitruv.framework.views.View;
@@ -43,7 +41,7 @@ public class VSUMExample {
     VirtualModel model = new VirtualModelBuilder()
         .withStorageFolder(Path.of("vsumexample"))
         .withUserInteractorForResultProvider(new TestUserInteraction.ResultProvider(new TestUserInteraction()))
-        .withChangePropagationSpecifications(new Model2Model2ChangePropagationSpecification()).withViewTypes(viewTypes)
+        .withChangePropagationSpecifications(<#list changePropagationSpecifications as specification>new ${specification}()<#sep>, </#list>).withViewTypes(viewTypes)
         .buildAndInitialize();
       getDefaultView(model);
       return model;
