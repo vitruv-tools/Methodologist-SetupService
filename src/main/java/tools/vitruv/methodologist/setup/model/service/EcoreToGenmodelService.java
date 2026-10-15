@@ -14,6 +14,7 @@ import org.eclipse.emf.codegen.ecore.genmodel.GenModel;
 import org.eclipse.emf.codegen.ecore.genmodel.GenModelFactory;
 import org.eclipse.emf.codegen.ecore.genmodel.GenModelPackage;
 import org.eclipse.emf.codegen.ecore.genmodel.GenPackage;
+import org.eclipse.emf.codegen.ecore.genmodel.GenResourceKind;
 import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.resource.Resource;
@@ -30,6 +31,18 @@ import tools.vitruv.methodologist.setup.messages.InfoMessages;
 @Slf4j
 @Service
 public class EcoreToGenmodelService {
+
+  /**
+   * Model plugin id shared by all generated GenModels, following the Methodologist template
+   * (vitruv-tools/Methodologist-Template). The VSUM build creates a single model project named
+   * after it, so every GenModel has to generate its code into that project. It is also used as the
+   * base package, as in the template.
+   */
+  public static final String MODEL_PLUGIN_ID = "tools.vitruv.methodologisttemplate.model";
+
+  /** Model directory inside the shared model project, as in the Methodologist template. */
+  public static final String MODEL_DIRECTORY =
+      "/" + MODEL_PLUGIN_ID + "/target/generated-sources/ecore";
 
   private static final String GENMODEL_EXTENSION = ".genmodel";
   private static final String ECORE_EXTENSION = ".ecore";
@@ -142,7 +155,8 @@ public class EcoreToGenmodelService {
    *
    * <p>{@link GenModel#initialize} reconciles the GenModel against the package, generating the
    * {@code genPackages}, {@code genClasses} and {@code genFeatures} entries so the produced file
-   * mirrors what the Eclipse GenModel importer emits.
+   * mirrors what the Eclipse GenModel importer emits. The model plugin id, model directory and base
+   * package follow the Methodologist template, so all generated GenModels share one model project.
    *
    * @param ePackage the root EPackage
    * @param ecoreName the ECore filename referenced by {@code foreignModel}
@@ -158,8 +172,6 @@ public class EcoreToGenmodelService {
           "ECORE_NS_URI_MISSING", ErrorMessages.GENMODEL_GENERATION_NS_URI_ERROR);
     }
 
-    String modelId = deriveModelId(nsUri);
-
     GenModel genModel = GenModelFactory.eINSTANCE.createGenModel();
     genModel.getForeignModel().add(ecoreName);
 
@@ -168,8 +180,8 @@ public class EcoreToGenmodelService {
     genModel.initialize(Collections.singleton(ePackage));
 
     String modelName = capitalize(ePackage.getName());
-    genModel.setModelDirectory("/" + modelId + "/target/generated-sources/ecore");
-    genModel.setModelPluginID(modelId);
+    genModel.setModelDirectory(MODEL_DIRECTORY);
+    genModel.setModelPluginID(MODEL_PLUGIN_ID);
     genModel.setModelName(modelName);
     genModel.setCreationIcons(false);
     genModel.setRootExtendsClass(ROOT_EXTENDS_CLASS);
@@ -180,8 +192,12 @@ public class EcoreToGenmodelService {
 
     GenPackage genPackage = genModel.getGenPackages().get(0);
     genPackage.setPrefix(modelName);
-    genPackage.setBasePackage(modelId);
+    genPackage.setBasePackage(MODEL_PLUGIN_ID);
     genPackage.setDisposableProviderFactory(true);
+    // initialize() switches to an XML resource for packages with ExtendedMetaData annotations,
+    // which generates XML resource classes the VSUM model project cannot compile. The template
+    // uses the default resource, so keep it for every package.
+    genPackage.setResource(GenResourceKind.NONE_LITERAL);
 
     return genModel;
   }
@@ -223,55 +239,6 @@ public class EcoreToGenmodelService {
       log.error("Failed to serialize genmodel", e);
       throw new GenmodelException(
           "GENMODEL_SERIALIZE_ERROR", ErrorMessages.GENMODEL_GENERATION_ERROR, e);
-    }
-  }
-
-  /**
-   * Derives the model plugin id / base package from a namespace URI.
-   *
-   * <p>The host is turned into reverse-domain notation and the path segments are appended, e.g.
-   * {@code http://vitruv.tools/methodologisttemplate/model} becomes {@code
-   * tools.vitruv.methodologisttemplate.model}.
-   *
-   * @param nsUri the namespace URI
-   * @return the derived dotted identifier
-   */
-  private String deriveModelId(String nsUri) {
-    String cleaned = nsUri.replaceAll("^[a-zA-Z][a-zA-Z0-9+.-]*://", "").replaceAll("^urn:", "");
-    String[] segments = cleaned.split("/");
-    if (segments.length == 0 || segments[0].isEmpty()) {
-      return "generated.model";
-    }
-
-    StringBuilder id = new StringBuilder();
-
-    // Host in reverse-domain notation.
-    String[] hostParts = segments[0].split("\\.");
-    for (int i = hostParts.length - 1; i >= 0; i--) {
-      appendSegment(id, hostParts[i]);
-    }
-
-    // Remaining path segments in order.
-    for (int i = 1; i < segments.length; i++) {
-      appendSegment(id, segments[i]);
-    }
-
-    return id.length() == 0 ? "generated.model" : id.toString();
-  }
-
-  /**
-   * Appends a sanitized, lower-cased segment to a dotted identifier.
-   *
-   * @param builder the identifier being built
-   * @param segment the raw segment to append
-   */
-  private void appendSegment(StringBuilder builder, String segment) {
-    String sanitized = segment.replaceAll("[^a-zA-Z0-9]", "").toLowerCase();
-    if (!sanitized.isEmpty()) {
-      if (builder.length() > 0) {
-        builder.append('.');
-      }
-      builder.append(sanitized);
     }
   }
 
