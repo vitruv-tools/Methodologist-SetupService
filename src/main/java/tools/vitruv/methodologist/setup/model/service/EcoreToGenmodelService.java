@@ -4,6 +4,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -16,10 +17,12 @@ import org.eclipse.emf.codegen.ecore.genmodel.GenModelPackage;
 import org.eclipse.emf.codegen.ecore.genmodel.GenPackage;
 import org.eclipse.emf.codegen.ecore.genmodel.GenResourceKind;
 import org.eclipse.emf.common.util.URI;
+import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
+import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.emf.ecore.xmi.XMLResource;
 import org.eclipse.emf.ecore.xmi.impl.XMIResourceFactoryImpl;
 import org.springframework.stereotype.Service;
@@ -94,6 +97,99 @@ public class EcoreToGenmodelService {
           e);
     } finally {
       deleteQuietly(workDir);
+    }
+  }
+
+  /**
+   * Generates GenModels for several ECore files at once, writing each next to its ECore under the
+   * ECore's base name (for example {@code model.ecore} gets {@code model.genmodel}).
+   *
+   * <p>The ECores are loaded into one resource set, so a metamodel that references another one (by
+   * relative file reference or by nsURI) gets the other metamodel's GenPackage as used GenPackage.
+   * Without it, EMF cannot qualify the referenced package interface and the generated code does not
+   * compile.
+   *
+   * @param ecorePaths the ECore files to generate GenModels for
+   * @return the written GenModel files, in the order of {@code ecorePaths}
+   * @throws GenmodelException if an ECore is invalid or a GenModel cannot be written
+   */
+  public List<Path> generateGenmodelFiles(List<Path> ecorePaths) {
+    ResourceSet resourceSet = createResourceSet();
+    List<EPackage> ePackages = new ArrayList<>();
+    for (Path ecorePath : ecorePaths) {
+      EPackage ePackage = loadEcoreFile(resourceSet, ecorePath, ecorePath.getFileName().toString());
+      if (ePackage.getNsURI() != null) {
+        resourceSet.getPackageRegistry().put(ePackage.getNsURI(), ePackage);
+      }
+      ePackages.add(ePackage);
+    }
+
+    List<GenModel> genModels = new ArrayList<>();
+    List<Path> genmodelPaths = new ArrayList<>();
+    for (int index = 0; index < ecorePaths.size(); index++) {
+      Path ecorePath = ecorePaths.get(index);
+      String ecoreName = ecorePath.getFileName().toString();
+      Path genmodelPath = ecorePath.resolveSibling(stripExtension(ecoreName) + GENMODEL_EXTENSION);
+      GenModel genModel = createGenModel(ePackages.get(index), ecoreName);
+      resourceSet
+          .createResource(URI.createFileURI(genmodelPath.toAbsolutePath().toString()))
+          .getContents()
+          .add(genModel);
+      genModels.add(genModel);
+      genmodelPaths.add(genmodelPath);
+    }
+
+    linkUsedGenPackages(genModels);
+    for (int index = 0; index < genModels.size(); index++) {
+      writeGenModel(genModels.get(index), genmodelPaths.get(index));
+    }
+    log.info("Generated {} genmodel(s) for the VSUM build", genmodelPaths.size());
+    return genmodelPaths;
+  }
+
+  /**
+   * Adds the GenPackages of the other metamodels a GenModel's package references as used
+   * GenPackages.
+   *
+   * @param genModels the GenModels generated together
+   */
+  private void linkUsedGenPackages(List<GenModel> genModels) {
+    Map<EPackage, GenPackage> genPackageByEPackage = new HashMap<>();
+    for (GenModel genModel : genModels) {
+      for (GenPackage genPackage : genModel.getGenPackages()) {
+        genPackageByEPackage.put(genPackage.getEcorePackage(), genPackage);
+      }
+    }
+
+    for (GenModel genModel : genModels) {
+      for (GenPackage genPackage : genModel.getGenPackages()) {
+        for (EObject referenced :
+            EcoreUtil.ExternalCrossReferencer.find(genPackage.getEcorePackage()).keySet()) {
+          GenPackage used = genPackageByEPackage.get(EcoreUtil.getRootContainer(referenced));
+          if (used != null
+              && used.getGenModel() != genModel
+              && !genModel.getUsedGenPackages().contains(used)) {
+            genModel.getUsedGenPackages().add(used);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Writes a GenModel to its file.
+   *
+   * @param genModel the GenModel to write; its resource must already be placed at {@code path}
+   * @param path the target file
+   * @throws GenmodelException if writing fails
+   */
+  private void writeGenModel(GenModel genModel, Path path) {
+    try {
+      Files.write(path, saveToBytes(genModel.eResource()));
+    } catch (IOException e) {
+      log.error("Failed to write genmodel: {}", path, e);
+      throw new GenmodelException(
+          "GENMODEL_SERIALIZE_ERROR", ErrorMessages.GENMODEL_GENERATION_ERROR, e);
     }
   }
 
@@ -223,23 +319,32 @@ public class EcoreToGenmodelService {
       }
 
       resource.getContents().add(genModel);
-
-      Map<String, Object> options = new HashMap<>();
-      options.put(XMLResource.OPTION_ENCODING, "UTF-8");
-      // Serialize cross-document references (ecorePackage/ecoreClass/ecoreFeature) in the flat
-      // attribute style used by canonical genmodel files, e.g.
-      // ecoreClass="model.ecore#//Component".
-      options.put(XMLResource.OPTION_USE_ENCODED_ATTRIBUTE_STYLE, Boolean.TRUE);
-
-      ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-      resource.save(outputStream, options);
-
-      return outputStream.toByteArray();
+      return saveToBytes(resource);
     } catch (IOException e) {
       log.error("Failed to serialize genmodel", e);
       throw new GenmodelException(
           "GENMODEL_SERIALIZE_ERROR", ErrorMessages.GENMODEL_GENERATION_ERROR, e);
     }
+  }
+
+  /**
+   * Serializes a GenModel resource to XMI.
+   *
+   * @param resource the GenModel resource
+   * @return the XMI content as byte array
+   * @throws IOException if serialization fails
+   */
+  private byte[] saveToBytes(Resource resource) throws IOException {
+    Map<String, Object> options = new HashMap<>();
+    options.put(XMLResource.OPTION_ENCODING, "UTF-8");
+    // Serialize cross-document references (ecorePackage/ecoreClass/ecoreFeature) in the flat
+    // attribute style used by canonical genmodel files, e.g.
+    // ecoreClass="model.ecore#//Component".
+    options.put(XMLResource.OPTION_USE_ENCODED_ATTRIBUTE_STYLE, Boolean.TRUE);
+
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+    resource.save(outputStream, options);
+    return outputStream.toByteArray();
   }
 
   /**

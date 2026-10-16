@@ -5,11 +5,16 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import tools.vitruv.methodologist.setup.exception.GenmodelException;
 import tools.vitruv.methodologist.setup.model.service.EcoreToGenmodelService;
 
@@ -124,6 +129,82 @@ class EcoreToGenmodelServiceTest {
         generate(ecore("library", "http://example.com/library", annotatedClass), "library.ecore");
 
     assertFalse(genmodel.contains("resource=\"XML\""));
+  }
+
+  private static String eClassReferencing(String name, String type) {
+    return "  <eClassifiers xsi:type=\"ecore:EClass\" name=\""
+        + name
+        + "\">\n"
+        + "    <eStructuralFeatures xsi:type=\"ecore:EReference\" name=\"target\" eType=\""
+        + type
+        + "\"/>\n"
+        + "  </eClassifiers>\n";
+  }
+
+  private Path writeEcore(Path dir, String filename, byte[] content) throws IOException {
+    return Files.write(dir.resolve(filename), content);
+  }
+
+  @Test
+  @DisplayName("Should write a template GenModel next to each ecore, named after the ecore file")
+  void testGenerateGenmodelFilesUsesEcoreFilename(@TempDir Path dir) throws IOException {
+    Path ecore =
+        writeEcore(
+            dir,
+            "KITModel.ecore",
+            ecore("Newuniversity", "http://www.example.org/university", eClass("exam")));
+
+    List<Path> genmodels = service.generateGenmodelFiles(List.of(ecore));
+
+    assertEquals(List.of(dir.resolve("KITModel.genmodel")), genmodels);
+    String genmodel = Files.readString(genmodels.get(0));
+    assertTrue(genmodel.contains("modelPluginID=\"" + TEMPLATE_PLUGIN_ID + "\""));
+    assertTrue(genmodel.contains("modelDirectory=\"" + TEMPLATE_MODEL_DIRECTORY + "\""));
+    assertTrue(genmodel.contains("ecorePackage=\"KITModel.ecore#/\""));
+    assertTrue(genmodel.contains("<foreignModel>KITModel.ecore</foreignModel>"));
+  }
+
+  @Test
+  @DisplayName("Should link a GenModel to the GenModel of a metamodel its ecore references")
+  void testGenerateGenmodelFilesLinksReferencedMetamodels(@TempDir Path dir) throws IOException {
+    Path model2 =
+        writeEcore(
+            dir, "model2.ecore", ecore("model2", "http://example.com/model2", eClass("Entity")));
+    Path model3 =
+        writeEcore(
+            dir,
+            "model3.ecore",
+            ecore(
+                "model3",
+                "http://example.com/model3",
+                eClassReferencing("Root", "ecore:EClass model2.ecore#//Entity")));
+
+    List<Path> genmodels = service.generateGenmodelFiles(List.of(model2, model3));
+
+    String model2Genmodel = Files.readString(genmodels.get(0));
+    String model3Genmodel = Files.readString(genmodels.get(1));
+    assertFalse(model2Genmodel.contains("usedGenPackages"));
+    assertTrue(model3Genmodel.contains("usedGenPackages=\"model2.genmodel#//model2\""));
+  }
+
+  @Test
+  @DisplayName("Should link referenced metamodels that are referenced by their nsURI")
+  void testGenerateGenmodelFilesLinksNsUriReferences(@TempDir Path dir) throws IOException {
+    Path model3 =
+        writeEcore(
+            dir,
+            "model3.ecore",
+            ecore(
+                "model3",
+                "http://example.com/model3",
+                eClassReferencing("Root", "ecore:EClass http://example.com/model2#//Entity")));
+    Path model2 =
+        writeEcore(
+            dir, "model2.ecore", ecore("model2", "http://example.com/model2", eClass("Entity")));
+
+    List<Path> genmodels = service.generateGenmodelFiles(List.of(model3, model2));
+
+    assertTrue(Files.readString(genmodels.get(0)).contains("model2.genmodel#//model2"));
   }
 
   @Test
