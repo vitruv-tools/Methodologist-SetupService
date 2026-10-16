@@ -26,6 +26,7 @@ import org.springframework.stereotype.Service;
 import tools.vitruv.methodologist.setup.config.VitruvConfiguration;
 import tools.vitruv.methodologist.setup.exception.MissingModelException;
 import tools.vitruv.methodologist.setup.messages.ErrorMessages;
+import tools.vitruv.methodologist.setup.model.service.EcoreToGenmodelService;
 
 /** Business service for building and packaging VSUM projects from uploaded model files. */
 @Slf4j
@@ -42,6 +43,7 @@ public class VsumService {
           + "vsum-0.1.0-SNAPSHOT-jar-with-dependencies.jar";
 
   private final GenerateFromTemplate generateFromTemplate;
+  private final EcoreToGenmodelService ecoreToGenmodelService;
 
   /**
    * Generates a full VSUM project, builds it with Maven, and returns the project archive as bytes.
@@ -198,12 +200,16 @@ public class VsumService {
   }
 
   /**
-   * Copies each metamodel/genmodel pair into the workspace's ecore source directory and aligns the
-   * copied genmodels with the generated model project.
+   * Copies each metamodel into the workspace's ecore source directory and generates fresh genmodels
+   * for all of them.
+   *
+   * <p>Uploaded genmodels are ignored: they may target another project, reference the ECore under a
+   * different filename or miss the genmodels of referenced metamodels, each of which breaks the
+   * build. Generated genmodels always follow the Methodologist template.
    *
    * @param workspace root directory of the generated project
-   * @param modelFiles paired metamodel/genmodel files to copy
-   * @return the copied pairs pointing at their new locations within the workspace
+   * @param modelFiles paired metamodel/genmodel files; only the metamodels are used
+   * @return the copied metamodels paired with their generated genmodels
    * @throws IOException when creating the target directory or copying a file fails
    */
   private List<ModelFiles> copyModelFiles(Path workspace, List<ModelFiles> modelFiles)
@@ -211,12 +217,16 @@ public class VsumService {
     Path targetDirectory = workspace.resolve("model/src/main/ecore");
     Files.createDirectories(targetDirectory);
 
-    List<ModelFiles> copied = new ArrayList<>();
+    List<Path> copiedMetamodels = new ArrayList<>();
     for (ModelFiles pair : modelFiles) {
-      File copiedMetamodel = copyFile(pair.metamodelFile(), targetDirectory);
-      File copiedGenmodel = copyFile(pair.genmodelFile(), targetDirectory);
-      GenmodelProjectAligner.align(copiedGenmodel, copiedMetamodel);
-      copied.add(new ModelFiles(copiedMetamodel, copiedGenmodel));
+      copiedMetamodels.add(copyFile(pair.metamodelFile(), targetDirectory).toPath());
+    }
+    List<Path> genmodels = ecoreToGenmodelService.generateGenmodelFiles(copiedMetamodels);
+
+    List<ModelFiles> copied = new ArrayList<>();
+    for (int index = 0; index < copiedMetamodels.size(); index++) {
+      copied.add(
+          new ModelFiles(copiedMetamodels.get(index).toFile(), genmodels.get(index).toFile()));
     }
     return copied;
   }

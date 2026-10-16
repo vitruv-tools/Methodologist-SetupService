@@ -13,23 +13,57 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import tools.vitruv.methodologist.setup.model.service.EcoreToGenmodelService;
 
 class VsumServiceTest {
 
   private final GenerateFromTemplate generateFromTemplate = mock(GenerateFromTemplate.class);
+  private final EcoreToGenmodelService ecoreToGenmodelService = new EcoreToGenmodelService();
   @TempDir Path tempDir;
 
   @Test
+  void generateProjectArchive_shouldRegenerateUploadedGenmodel() throws Exception {
+    File ecore = writeValidEcore();
+    File genmodel = Files.writeString(tempDir.resolve("model.genmodel"), "not a genmodel").toFile();
+    VsumService.ModelFiles modelFiles = new VsumService.ModelFiles(ecore, genmodel);
+
+    VsumService service = spy(new VsumService(generateFromTemplate, ecoreToGenmodelService));
+    doNothing().when(service).runMavenBuild(any(Path.class), anyMap());
+
+    byte[] archive = service.generateProjectArchive(List.of(modelFiles), List.of());
+
+    String builtGenmodel = readZipEntry(archive, "model/src/main/ecore/model.genmodel");
+    assertThat(builtGenmodel)
+        .contains("modelPluginID=\"" + EcoreToGenmodelService.MODEL_PLUGIN_ID + "\"")
+        .contains("ecorePackage=\"model.ecore#/\"");
+  }
+
+  private static String readZipEntry(byte[] archive, String name) throws IOException {
+    try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(archive))) {
+      for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
+        if (entry.getName().equals(name)) {
+          return new String(zip.readAllBytes(), StandardCharsets.UTF_8);
+        }
+      }
+    }
+    throw new AssertionError("Archive has no entry " + name);
+  }
+
+  @Test
   void generateProjectArchive_shouldThrowWhenModelFilesNull() {
-    VsumService service = spy(new VsumService(generateFromTemplate));
+    VsumService service = spy(new VsumService(generateFromTemplate, ecoreToGenmodelService));
 
     assertThatThrownBy(() -> service.generateProjectArchive(null, List.of()))
         .isInstanceOf(IllegalArgumentException.class)
@@ -38,7 +72,7 @@ class VsumServiceTest {
 
   @Test
   void generateProjectArchive_shouldThrowWhenModelFilesEmpty() {
-    VsumService service = spy(new VsumService(generateFromTemplate));
+    VsumService service = spy(new VsumService(generateFromTemplate, ecoreToGenmodelService));
 
     assertThatThrownBy(() -> service.generateProjectArchive(List.of(), List.of()))
         .isInstanceOf(IllegalArgumentException.class);
@@ -52,7 +86,7 @@ class VsumServiceTest {
 
     VsumService.ModelFiles modelFiles = new VsumService.ModelFiles(missing, genmodel);
 
-    VsumService service = spy(new VsumService(generateFromTemplate));
+    VsumService service = spy(new VsumService(generateFromTemplate, ecoreToGenmodelService));
 
     assertThatThrownBy(() -> service.generateProjectArchive(List.of(modelFiles), List.of()))
         .isInstanceOf(IllegalArgumentException.class)
@@ -68,7 +102,7 @@ class VsumServiceTest {
 
     VsumService.ModelFiles modelFiles = new VsumService.ModelFiles(ecore, genmodel);
 
-    VsumService service = spy(new VsumService(generateFromTemplate));
+    VsumService service = spy(new VsumService(generateFromTemplate, ecoreToGenmodelService));
 
     assertThatThrownBy(
             () -> service.generateProjectArchive(List.of(modelFiles), List.of(missingReaction)))
@@ -110,7 +144,7 @@ class VsumServiceTest {
 
     VsumService.ModelFiles modelFiles = new VsumService.ModelFiles(ecore, genmodel);
 
-    VsumService service = spy(new VsumService(generateFromTemplate));
+    VsumService service = spy(new VsumService(generateFromTemplate, ecoreToGenmodelService));
 
     doAnswer(
             invocation -> {
@@ -142,7 +176,7 @@ class VsumServiceTest {
 
     VsumService.ModelFiles modelFiles = new VsumService.ModelFiles(ecore, genmodel);
 
-    VsumService service = spy(new VsumService(generateFromTemplate));
+    VsumService service = spy(new VsumService(generateFromTemplate, ecoreToGenmodelService));
 
     byte[] expected = {1, 2, 3};
 
@@ -163,7 +197,7 @@ class VsumServiceTest {
 
     VsumService.ModelFiles modelFiles = new VsumService.ModelFiles(ecore, genmodel);
 
-    VsumService service = spy(new VsumService(generateFromTemplate));
+    VsumService service = spy(new VsumService(generateFromTemplate, ecoreToGenmodelService));
 
     byte[] jarBytes = {10, 20, 30, 40};
     stubProjectGeneration(service, jarBytes);
@@ -183,7 +217,7 @@ class VsumServiceTest {
 
     VsumService.ModelFiles modelFiles = new VsumService.ModelFiles(ecore, genmodel);
 
-    VsumService service = spy(new VsumService(generateFromTemplate));
+    VsumService service = spy(new VsumService(generateFromTemplate, ecoreToGenmodelService));
 
     doAnswer(
             invocation -> {
@@ -208,7 +242,7 @@ class VsumServiceTest {
 
     VsumService.ModelFiles modelFiles = new VsumService.ModelFiles(ecore, genmodel);
 
-    VsumService service = spy(new VsumService(generateFromTemplate));
+    VsumService service = spy(new VsumService(generateFromTemplate, ecoreToGenmodelService));
 
     byte[] expected = {4, 5, 6};
 
@@ -223,7 +257,7 @@ class VsumServiceTest {
 
   @Test
   void generateProjectJar_shouldThrowWhenModelFilesNull() {
-    VsumService service = spy(new VsumService(generateFromTemplate));
+    VsumService service = spy(new VsumService(generateFromTemplate, ecoreToGenmodelService));
 
     assertThatThrownBy(() -> service.generateProjectJar(null, List.of()))
         .isInstanceOf(IllegalArgumentException.class)
@@ -251,7 +285,7 @@ class VsumServiceTest {
   @Test
   void runMavenBuild_shouldFailWhenExitCodeNonZero() throws Exception {
 
-    VsumService service = new VsumService(generateFromTemplate);
+    VsumService service = new VsumService(generateFromTemplate, ecoreToGenmodelService);
 
     Path projectRoot = tempDir;
 
@@ -262,7 +296,7 @@ class VsumServiceTest {
   @Test
   void createMavenProcessBuilderNamespaceProperties_shouldBePassed() throws Exception {
 
-    VsumService service = new VsumService(generateFromTemplate);
+    VsumService service = new VsumService(generateFromTemplate, ecoreToGenmodelService);
 
     var method =
         VsumService.class.getDeclaredMethod("createMavenProcessBuilder", Path.class, Map.class);
