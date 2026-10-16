@@ -198,7 +198,8 @@ public class VsumService {
   }
 
   /**
-   * Copies each metamodel/genmodel pair into the workspace's ecore source directory.
+   * Copies each metamodel/genmodel pair into the workspace's ecore source directory and aligns the
+   * copied genmodels with the generated model project.
    *
    * @param workspace root directory of the generated project
    * @param modelFiles paired metamodel/genmodel files to copy
@@ -214,6 +215,7 @@ public class VsumService {
     for (ModelFiles pair : modelFiles) {
       File copiedMetamodel = copyFile(pair.metamodelFile(), targetDirectory);
       File copiedGenmodel = copyFile(pair.genmodelFile(), targetDirectory);
+      GenmodelProjectAligner.align(copiedGenmodel, copiedMetamodel);
       copied.add(new ModelFiles(copiedMetamodel, copiedGenmodel));
     }
     return copied;
