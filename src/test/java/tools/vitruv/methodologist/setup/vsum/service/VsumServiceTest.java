@@ -289,7 +289,7 @@ class VsumServiceTest {
 
     Path projectRoot = tempDir;
 
-    assertThatThrownBy(() -> service.runMavenBuild(projectRoot, Map.of("invalid", "value")))
+    assertThatThrownBy(() -> service.runMavenBuild(projectRoot, Map.of("invalid", "http://value")))
         .isInstanceOf(IOException.class);
   }
 

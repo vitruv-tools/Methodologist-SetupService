@@ -115,7 +115,8 @@ class VsumControllerTest {
   void buildProjectReturnsZipResponse() throws Exception {
     VsumProjectBuildService buildService = mock(VsumProjectBuildService.class);
     byte[] archive = {1, 2, 3, 4};
-    when(buildService.buildProjectArchive(anyList(), anyList(), anyList())).thenReturn(archive);
+    when(buildService.buildProjectArchive(anyList(), anyList(), anyList(), any()))
+        .thenReturn(archive);
 
     VsumController controller = new VsumController(buildService);
 
@@ -127,7 +128,7 @@ class VsumControllerTest {
             "genmodelFiles", "model.genmodel", "application/octet-stream", "gen".getBytes());
 
     ResponseEntity<byte[]> response =
-        controller.buildProject(List.of(metamodel), List.of(genmodel), List.of());
+        controller.buildProject(List.of(metamodel), List.of(genmodel), List.of(), null);
 
     assertEquals(200, response.getStatusCode().value());
     assertArrayEquals(archive, response.getBody());
@@ -143,7 +144,7 @@ class VsumControllerTest {
   void buildJarReturnsJarResponse() throws NoSuchFileException {
     VsumProjectBuildService buildService = mock(VsumProjectBuildService.class);
     byte[] jar = {9, 8, 7};
-    when(buildService.buildProjectJar(anyList(), anyList(), any())).thenReturn(jar);
+    when(buildService.buildProjectJar(anyList(), anyList(), any(), any())).thenReturn(jar);
 
     VsumController controller = new VsumController(buildService);
 
@@ -155,7 +156,7 @@ class VsumControllerTest {
             "genmodelFiles", "model.genmodel", "application/octet-stream", "gen".getBytes());
 
     ResponseEntity<byte[]> response =
-        controller.buildJar(List.of(metamodel), List.of(genmodel), null);
+        controller.buildJar(List.of(metamodel), List.of(genmodel), null, null);
 
     assertEquals(200, response.getStatusCode().value());
     assertArrayEquals(jar, response.getBody());
@@ -165,6 +166,6 @@ class VsumControllerTest {
         "tools.vitruv.methodologisttemplate.vsum-0.1.0-SNAPSHOT-jar-with-dependencies.jar",
         response.getHeaders().getContentDisposition().getFilename());
 
-    verify(buildService).buildProjectJar(anyList(), anyList(), any());
+    verify(buildService).buildProjectJar(anyList(), anyList(), any(), any());
   }
 }

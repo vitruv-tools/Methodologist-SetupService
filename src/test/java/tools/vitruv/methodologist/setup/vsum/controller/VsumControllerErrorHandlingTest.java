@@ -1,5 +1,6 @@
 package tools.vitruv.methodologist.setup.vsum.controller;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -31,7 +32,7 @@ class VsumControllerErrorHandlingTest {
             .setControllerAdvice(new GlobalExceptionHandler())
             .build();
 
-    when(buildService.buildProjectArchive(anyList(), anyList(), anyList()))
+    when(buildService.buildProjectArchive(anyList(), anyList(), anyList(), any()))
         .thenThrow(
             new MethodologistSetupException(
                 "VSUM_INPUT_ERROR",

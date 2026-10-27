@@ -8,12 +8,15 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import tools.vitruv.methodologist.setup.config.GeneratedProjectVersions;
 import tools.vitruv.methodologist.setup.config.MetamodelLocation;
 import tools.vitruv.methodologist.setup.config.VitruvConfiguration;
 import tools.vitruv.methodologist.setup.exception.MissingModelException;
@@ -26,8 +29,22 @@ public class GenerateFromTemplate {
   private static final String PACKAGE_NAME = "packageName";
   private static final String CHANGE_PROPAGATION_SPECIFICATIONS = "changePropagationSpecifications";
 
-  /** Constructor. */
-  public GenerateFromTemplate() {}
+  private final GeneratedProjectVersions versions;
+
+  /** Creates a generator using the default Vitruvius versions. */
+  public GenerateFromTemplate() {
+    this(new GeneratedProjectVersions());
+  }
+
+  /**
+   * Creates a generator using the given Vitruvius versions.
+   *
+   * @param versions the versions of the Vitruvius artifacts used by generated projects
+   */
+  @Autowired
+  public GenerateFromTemplate(GeneratedProjectVersions versions) {
+    this.versions = versions;
+  }
 
   private Configuration getConfiguration() {
     Configuration cfg = new Configuration(Configuration.VERSION_2_3_31);
@@ -42,7 +59,8 @@ public class GenerateFromTemplate {
   private void writeTemplate(Template template, File filePath, Map<String, Object> data)
       throws IOException {
     FileUtils.createFile(filePath.getAbsolutePath());
-    try (Writer fileWriter = new FileWriter(filePath.getAbsolutePath(), false)) {
+    try (Writer fileWriter =
+        new FileWriter(filePath.getAbsolutePath(), StandardCharsets.UTF_8, false)) {
       template.process(data, fileWriter);
       fileWriter.flush();
       log.info("writing to " + filePath.getAbsolutePath());
@@ -78,6 +96,7 @@ public class GenerateFromTemplate {
 
     Map<String, Object> data = new HashMap<>();
     data.put("packageName", packageName.trim());
+    data.put("versions", versions);
 
     Template template = loadTemplate(cfg, "rootPom.ftl");
     writeTemplate(template, filePath, data);
@@ -91,10 +110,24 @@ public class GenerateFromTemplate {
    * @throws java.io.IOException If the file cannot be written.
    */
   public void generateVsumPom(File filePath, String packageName) throws IOException {
+    generateVsumPom(filePath, packageName, false);
+  }
+
+  /**
+   * Generates the vsum pom file.
+   *
+   * @param filePath The file path to write the vsum pom file to.
+   * @param packageName The package name from the genmodel.
+   * @param hasConstraints Whether the project contains OCL constraints, which requires VitruvOCL.
+   * @throws java.io.IOException If the file cannot be written.
+   */
+  public void generateVsumPom(File filePath, String packageName, boolean hasConstraints)
+      throws IOException {
     Configuration cfg = getConfiguration();
 
     Map<String, Object> data = new HashMap<>();
     data.put("packageName", packageName.trim());
+    data.put("hasConstraints", hasConstraints);
 
     Template template = loadTemplate(cfg, "vsumPom.ftl");
     writeTemplate(template, filePath, data);
@@ -115,12 +148,34 @@ public class GenerateFromTemplate {
       List<String> models,
       List<String> changePropagationSpecifications)
       throws IOException {
+    generateVsumExample(filePath, packageName, models, changePropagationSpecifications, List.of());
+  }
+
+  /**
+   * Generates the vsum example file.
+   *
+   * @param filePath The file path to write the vsum example file to.
+   * @param packageName The package name from the genmodel.
+   * @param models The model names to create view types for.
+   * @param changePropagationSpecifications The change propagation specification class names.
+   * @param constraintResources The classpath resource names of the OCL constraint files to register
+   *     at the virtual model, may be empty.
+   * @throws java.io.IOException If the file cannot be written.
+   */
+  public void generateVsumExample(
+      File filePath,
+      String packageName,
+      List<String> models,
+      List<String> changePropagationSpecifications,
+      List<String> constraintResources)
+      throws IOException {
     Configuration cfg = getConfiguration();
 
     Map<String, Object> data = new HashMap<>();
     data.put("packageName", packageName.trim());
     data.put("models", models);
     data.put(CHANGE_PROPAGATION_SPECIFICATIONS, changePropagationSpecifications);
+    data.put("constraintResources", constraintResources);
 
     Template template = loadTemplate(cfg, "vsumExample.ftl");
     writeTemplate(template, filePath, data);

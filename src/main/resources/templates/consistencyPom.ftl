@@ -89,7 +89,6 @@
         <plugin>
         <groupId>org.eclipse.xtext</groupId>
         <artifactId>xtext-maven-plugin</artifactId>
-        <version>2.39.0</version>
         <configuration>
             <languages>
                 <language>
@@ -116,17 +115,17 @@
         <dependency>
             <groupId>tools.vitruv</groupId>
             <artifactId>tools.vitruv.dsls.reactions.language</artifactId>
-            <version>3.1.0</version>
+            <version>${vitruv-dsls.version}</version>
         </dependency>
         <dependency>
             <groupId>tools.vitruv</groupId>
             <artifactId>tools.vitruv.dsls.reactions.runtime</artifactId>
-            <version>3.1.0</version>
+            <version>${vitruv-dsls.version}</version>
         </dependency>
         <dependency>
             <groupId>tools.vitruv</groupId>
             <artifactId>tools.vitruv.dsls.common</artifactId>
-            <version>3.1.0</version>
+            <version>${vitruv-dsls.version}</version>
         </dependency>
         <dependency>
         <groupId>${project.groupId}</groupId>

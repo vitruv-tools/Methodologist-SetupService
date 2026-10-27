@@ -16,6 +16,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
@@ -24,6 +25,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import tools.vitruv.methodologist.setup.config.VitruvConfiguration;
+import tools.vitruv.methodologist.setup.exception.MethodologistSetupException;
 import tools.vitruv.methodologist.setup.exception.MissingModelException;
 import tools.vitruv.methodologist.setup.messages.ErrorMessages;
 import tools.vitruv.methodologist.setup.model.service.EcoreToGenmodelService;
@@ -41,6 +43,22 @@ public class VsumService {
   static final String VSUM_JAR_RELATIVE_PATH =
       "vsum/target/tools.vitruv.methodologisttemplate."
           + "vsum-0.1.0-SNAPSHOT-jar-with-dependencies.jar";
+
+  /** Directory, relative to the generated project root, containing the OCL constraint files. */
+  static final String CONSTRAINTS_RESOURCE_DIRECTORY = "vsum/src/main/resources/constraints";
+
+  /** The Maven executable; on Windows, Maven is started via its {@code mvn.cmd} script. */
+  private static final String MAVEN_EXECUTABLE =
+      System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).startsWith("windows")
+          ? "mvn.cmd"
+          : "mvn";
+
+  private static final Pattern SAFE_PROPERTY_NAME = Pattern.compile("[A-Za-z_][A-Za-z0-9_.-]*");
+  private static final Pattern SAFE_NS_URI =
+      Pattern.compile("[A-Za-z][A-Za-z0-9+.-]*:[A-Za-z0-9/._~:#?=%@+-]*");
+
+  /** Classpath prefix of the OCL constraint files in the generated VSUM. */
+  private static final String CONSTRAINTS_RESOURCE_PREFIX = "constraints/";
 
   private final GenerateFromTemplate generateFromTemplate;
   private final EcoreToGenmodelService ecoreToGenmodelService;
@@ -61,7 +79,30 @@ public class VsumService {
       List<File> reactionFiles,
       Map<String, String> metamodelNamespaceMap)
       throws IOException, InterruptedException, MissingModelException {
-    return buildProject(modelFiles, reactionFiles, metamodelNamespaceMap, this::zipDirectory);
+    return generateProjectArchive(modelFiles, reactionFiles, List.of(), metamodelNamespaceMap);
+  }
+
+  /**
+   * Generates a full VSUM project including OCL constraints, builds it with Maven, and returns the
+   * project archive as bytes.
+   *
+   * @param modelFiles paired metamodel/genmodel files
+   * @param reactionFiles optional reaction files
+   * @param constraintFiles optional OCL constraint files with distinct names
+   * @param metamodelNamespaceMap map of model names to nsURIs
+   * @return zip archive bytes containing generated project and build artifacts
+   * @throws IOException when file IO or build execution fails
+   * @throws InterruptedException when the build process is interrupted
+   * @throws MissingModelException when the model configuration is invalid
+   */
+  public byte[] generateProjectArchive(
+      List<ModelFiles> modelFiles,
+      List<File> reactionFiles,
+      List<File> constraintFiles,
+      Map<String, String> metamodelNamespaceMap)
+      throws IOException, InterruptedException, MissingModelException {
+    return buildProject(
+        modelFiles, reactionFiles, constraintFiles, metamodelNamespaceMap, this::zipDirectory);
   }
 
   /**
@@ -97,7 +138,30 @@ public class VsumService {
       List<File> reactionFiles,
       Map<String, String> metamodelNamespaceMap)
       throws IOException, InterruptedException, MissingModelException {
-    return buildProject(modelFiles, reactionFiles, metamodelNamespaceMap, this::extractVsumJar);
+    return generateProjectJar(modelFiles, reactionFiles, List.of(), metamodelNamespaceMap);
+  }
+
+  /**
+   * Generates a full VSUM project including OCL constraints, builds it with Maven, and returns only
+   * the executable VSUM jar as bytes.
+   *
+   * @param modelFiles paired metamodel/genmodel files
+   * @param reactionFiles optional reaction files
+   * @param constraintFiles optional OCL constraint files with distinct names
+   * @param metamodelNamespaceMap map of model names to nsURIs
+   * @return the bytes of the built VSUM jar-with-dependencies
+   * @throws IOException when file IO, build execution, or jar extraction fails
+   * @throws InterruptedException when the build process is interrupted
+   * @throws MissingModelException when the model configuration is invalid
+   */
+  public byte[] generateProjectJar(
+      List<ModelFiles> modelFiles,
+      List<File> reactionFiles,
+      List<File> constraintFiles,
+      Map<String, String> metamodelNamespaceMap)
+      throws IOException, InterruptedException, MissingModelException {
+    return buildProject(
+        modelFiles, reactionFiles, constraintFiles, metamodelNamespaceMap, this::extractVsumJar);
   }
 
   /**
@@ -122,6 +186,7 @@ public class VsumService {
    *
    * @param modelFiles paired metamodel/genmodel files
    * @param reactionFiles optional reaction files
+   * @param constraintFiles optional OCL constraint files with distinct names
    * @param metamodelNamespaceMap map of model names to nsURIs passed to the build
    * @param artifactExtractor extracts the resulting bytes from the built workspace
    * @return the extracted artifact bytes
@@ -132,6 +197,7 @@ public class VsumService {
   private byte[] buildProject(
       List<ModelFiles> modelFiles,
       List<File> reactionFiles,
+      List<File> constraintFiles,
       Map<String, String> metamodelNamespaceMap,
       ArtifactExtractor artifactExtractor)
       throws IOException, InterruptedException, MissingModelException {
@@ -148,7 +214,9 @@ public class VsumService {
       List<Path> copiedReactionFiles = copyReactionFiles(workspace, reactionFiles);
       configuration.setReactionLocations(copiedReactionFiles);
 
-      generateProjectFiles(configuration);
+      List<String> constraintResources = copyConstraintFiles(workspace, constraintFiles);
+
+      generateProjectFiles(configuration, constraintResources);
       runMavenBuild(workspace, metamodelNamespaceMap);
       return artifactExtractor.extract(workspace);
     } finally {
@@ -256,6 +324,35 @@ public class VsumService {
   }
 
   /**
+   * Copies the OCL constraint files into the resources of the VSUM module, so that the generated
+   * VSUM can load them from the classpath.
+   *
+   * @param workspace root directory of the generated project
+   * @param constraintFiles the constraint files to copy, may be {@code null}
+   * @return the classpath resource names of the copied files, empty if there are none
+   * @throws IOException when copying a file fails
+   */
+  private List<String> copyConstraintFiles(Path workspace, List<File> constraintFiles)
+      throws IOException {
+    if (constraintFiles == null || constraintFiles.isEmpty()) {
+      return List.of();
+    }
+    Path constraintsDirectory =
+        Files.createDirectories(workspace.resolve(CONSTRAINTS_RESOURCE_DIRECTORY));
+    List<String> resources = new ArrayList<>();
+    for (File constraintFile : constraintFiles) {
+      String resource = CONSTRAINTS_RESOURCE_PREFIX + constraintFile.getName();
+      if (resources.contains(resource)) {
+        throw new IllegalArgumentException(
+            "Constraint files must have distinct names: " + constraintFile.getName());
+      }
+      copyFile(constraintFile, constraintsDirectory);
+      resources.add(resource);
+    }
+    return resources;
+  }
+
+  /**
    * Copies a single file into the target directory, overwriting any existing file with the same
    * name.
    *
@@ -294,10 +391,12 @@ public class VsumService {
    * descriptor.
    *
    * @param configuration the Vitruv configuration describing the project to generate
+   * @param constraintResources the classpath resource names of the OCL constraint files
    * @throws IOException when writing a generated file fails
    * @throws MissingModelException when the model configuration is invalid
    */
-  private void generateProjectFiles(VitruvConfiguration configuration)
+  private void generateProjectFiles(
+      VitruvConfiguration configuration, List<String> constraintResources)
       throws IOException, MissingModelException {
     generateFromTemplate.generateRootPom(
         new File((configuration.getLocalPath() + "/pom.xml").trim()),
@@ -310,7 +409,8 @@ public class VsumService {
         configuration.getPackageName());
     generateFromTemplate.generateVsumPom(
         new File((configuration.getLocalPath() + "/vsum/pom.xml").trim()),
-        configuration.getPackageName());
+        configuration.getPackageName(),
+        !constraintResources.isEmpty());
     generateFromTemplate.generateP2WrappersPom(
         new File((configuration.getLocalPath() + "/p2wrappers/pom.xml").trim()),
         configuration.getPackageName());
@@ -330,7 +430,8 @@ public class VsumService {
         new File((configuration.getLocalPath() + "/vsum/src/main/java/VSUMExample.java").trim()),
         configuration.getPackageName(),
         configuration.getModelNames(),
-        changePropagationSpecifications);
+        changePropagationSpecifications,
+        constraintResources);
     generateFromTemplate.generateVsumTest(
         new File(
             (configuration.getLocalPath() + "/vsum/src/test/java/VSUMExampleTest.java").trim()),
@@ -401,11 +502,22 @@ public class VsumService {
    */
   private ProcessBuilder createMavenProcessBuilder(
       Path projectRoot, Map<String, String> metamodelNamespaceMap) {
-    ProcessBuilder processBuilder = new ProcessBuilder("mvn", "clean", "verify", "-DskipTests");
+    ProcessBuilder processBuilder =
+        new ProcessBuilder(MAVEN_EXECUTABLE, "clean", "verify", "-DskipTests");
 
     // Pass metamodel namespace information as system properties
     if (metamodelNamespaceMap != null && !metamodelNamespaceMap.isEmpty()) {
       for (var entry : metamodelNamespaceMap.entrySet()) {
+        // the values stem from uploaded files and end up on a command line, which on Windows is
+        // interpreted by cmd.exe, so only plain names and URIs are accepted
+        if (!SAFE_PROPERTY_NAME.matcher(entry.getKey()).matches()
+            || !SAFE_NS_URI.matcher(entry.getValue()).matches()) {
+          throw new MethodologistSetupException(
+              "VSUM_INPUT_ERROR",
+              String.format(
+                  "Metamodel %s has an unsupported name or nsURI %s",
+                  entry.getKey(), entry.getValue()));
+        }
         String propName = "metamodel." + entry.getKey() + ".nsuri";
         String propValue = "-D" + propName + "=" + entry.getValue();
         processBuilder.command().add(propValue);

@@ -2,6 +2,7 @@ package ${packageName}.vsum;
 
 import tools.vitruv.framework.vsum.VirtualModelBuilder;
 
+import java.io.IOException;
 import java.nio.file.Path;
 
 import org.eclipse.emf.ecore.resource.Resource;
@@ -30,12 +31,12 @@ public class VSUMExampleTest {
 
   @Disabled
   @Test
-  void test() {
+  void test() throws IOException {
     VirtualModel vsum = createDefaultVirtualModel();
     Assertions.assertNotNull(getDefaultView(vsum), "Creating the default view failed");
   }
 
-  private VirtualModel createDefaultVirtualModel() {
+  private VirtualModel createDefaultVirtualModel() throws IOException {
     return new VirtualModelBuilder()
         .withStorageFolder(projectPath)
         .withUserInteractorForResultProvider(new TestUserInteraction.ResultProvider(new TestUserInteraction()))

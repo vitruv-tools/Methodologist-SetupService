@@ -41,6 +41,7 @@ public class VsumController {
    * @param metamodelFiles metamodel files
    * @param genmodelFiles genmodel files paired by index with metamodel files
    * @param reactionFiles reaction files
+   * @param constraintFiles optional OCL constraint files
    * @return zip file response containing generated project
    * @throws NoSuchFileException when the build does not produce the expected artifact
    */
@@ -68,11 +69,15 @@ public class VsumController {
           @RequestPart("genmodelFiles")
           List<MultipartFile> genmodelFiles,
       @Parameter(description = "Reaction files", required = true) @RequestPart("reactionFiles")
-          List<MultipartFile> reactionFiles)
+          List<MultipartFile> reactionFiles,
+      @Parameter(description = "OCL constraint files, registered at the VSUM")
+          @RequestPart(value = "constraintFiles", required = false)
+          List<MultipartFile> constraintFiles)
       throws NoSuchFileException {
 
     byte[] archive =
-        vsumProjectBuildService.buildProjectArchive(metamodelFiles, genmodelFiles, reactionFiles);
+        vsumProjectBuildService.buildProjectArchive(
+            metamodelFiles, genmodelFiles, reactionFiles, constraintFiles);
 
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.parseMediaType("application/zip"));
@@ -92,6 +97,7 @@ public class VsumController {
    * @param metamodelFiles metamodel files
    * @param genmodelFiles genmodel files paired by index with metamodel files
    * @param reactionFiles reaction files
+   * @param constraintFiles optional OCL constraint files
    * @return response containing the built VSUM jar
    */
   @PostMapping(value = "/jar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -118,10 +124,14 @@ public class VsumController {
           @RequestPart("genmodelFiles")
           List<MultipartFile> genmodelFiles,
       @Parameter(description = "Reaction files", required = true) @RequestPart("reactionFiles")
-          List<MultipartFile> reactionFiles) {
+          List<MultipartFile> reactionFiles,
+      @Parameter(description = "OCL constraint files, registered at the VSUM")
+          @RequestPart(value = "constraintFiles", required = false)
+          List<MultipartFile> constraintFiles) {
 
     byte[] jar =
-        vsumProjectBuildService.buildProjectJar(metamodelFiles, genmodelFiles, reactionFiles);
+        vsumProjectBuildService.buildProjectJar(
+            metamodelFiles, genmodelFiles, reactionFiles, constraintFiles);
 
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.parseMediaType("application/java-archive"));

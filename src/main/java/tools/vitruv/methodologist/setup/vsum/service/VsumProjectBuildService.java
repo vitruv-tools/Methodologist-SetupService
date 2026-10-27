@@ -50,8 +50,33 @@ public class VsumProjectBuildService {
       List<MultipartFile> metamodelFiles,
       List<MultipartFile> genmodelFiles,
       List<MultipartFile> reactionFiles) {
+    return buildProjectArchive(metamodelFiles, genmodelFiles, reactionFiles, null);
+  }
+
+  /**
+   * Builds a VSUM project including OCL constraints from uploaded files and returns a zip archive
+   * of the whole project.
+   *
+   * @param metamodelFiles metamodel files
+   * @param genmodelFiles genmodel files in the same order as metamodel files
+   * @param reactionFiles reaction files
+   * @param constraintFiles optional OCL constraint files, may be {@code null}
+   * @return built project archive bytes
+   */
+  public byte[] buildProjectArchive(
+      List<MultipartFile> metamodelFiles,
+      List<MultipartFile> genmodelFiles,
+      List<MultipartFile> reactionFiles,
+      List<MultipartFile> constraintFiles) {
     return buildArtifact(
-        metamodelFiles, genmodelFiles, reactionFiles, vsumService::generateProjectArchive);
+        metamodelFiles,
+        genmodelFiles,
+        reactionFiles,
+        constraintFiles,
+        (models, reactions, constraints, namespaces) ->
+            constraints.isEmpty()
+                ? vsumService.generateProjectArchive(models, reactions, namespaces)
+                : vsumService.generateProjectArchive(models, reactions, constraints, namespaces));
   }
 
   /**
@@ -68,8 +93,33 @@ public class VsumProjectBuildService {
       List<MultipartFile> metamodelFiles,
       List<MultipartFile> genmodelFiles,
       List<MultipartFile> reactionFiles) {
+    return buildProjectJar(metamodelFiles, genmodelFiles, reactionFiles, null);
+  }
+
+  /**
+   * Builds a VSUM project including OCL constraints from uploaded files and returns only the
+   * executable VSUM jar-with-dependencies.
+   *
+   * @param metamodelFiles metamodel files
+   * @param genmodelFiles genmodel files in the same order as metamodel files
+   * @param reactionFiles reaction files
+   * @param constraintFiles optional OCL constraint files, may be {@code null}
+   * @return the bytes of the built VSUM jar
+   */
+  public byte[] buildProjectJar(
+      List<MultipartFile> metamodelFiles,
+      List<MultipartFile> genmodelFiles,
+      List<MultipartFile> reactionFiles,
+      List<MultipartFile> constraintFiles) {
     return buildArtifact(
-        metamodelFiles, genmodelFiles, reactionFiles, vsumService::generateProjectJar);
+        metamodelFiles,
+        genmodelFiles,
+        reactionFiles,
+        constraintFiles,
+        (models, reactions, constraints, namespaces) ->
+            constraints.isEmpty()
+                ? vsumService.generateProjectJar(models, reactions, namespaces)
+                : vsumService.generateProjectJar(models, reactions, constraints, namespaces));
   }
 
   /**
@@ -80,6 +130,7 @@ public class VsumProjectBuildService {
    * @param metamodelFiles metamodel files
    * @param genmodelFiles genmodel files in the same order as metamodel files
    * @param reactionFiles reaction files
+   * @param constraintFiles optional OCL constraint files, may be {@code null}
    * @param generator the VSUM generation strategy producing the artifact bytes
    * @return the produced artifact bytes
    */
@@ -87,6 +138,7 @@ public class VsumProjectBuildService {
       List<MultipartFile> metamodelFiles,
       List<MultipartFile> genmodelFiles,
       List<MultipartFile> reactionFiles,
+      List<MultipartFile> constraintFiles,
       ProjectArtifactGenerator generator) {
     validateInputs(metamodelFiles, genmodelFiles, reactionFiles);
 
@@ -98,7 +150,12 @@ public class VsumProjectBuildService {
       List<File> copiedReactionFiles = toReactionFiles(uploadWorkspace, reactionFiles);
       normalizeReactionImports(modelPairs, copiedReactionFiles);
       Map<String, String> metamodelNamespaceMap = extractMetamodelNamespaceMap(modelPairs);
-      return generator.generate(modelPairs, copiedReactionFiles, metamodelNamespaceMap);
+      List<File> copiedConstraintFiles =
+          ConstraintUploads.write(uploadWorkspace.resolve("constraints"), constraintFiles);
+      ConstraintUploads.checkMetamodels(
+          copiedConstraintFiles, extractMetamodelPackageNames(modelPairs));
+      return generator.generate(
+          modelPairs, copiedReactionFiles, copiedConstraintFiles, metamodelNamespaceMap);
     } catch (IOException | MissingModelException e) {
       String reason = e.getMessage() != null ? e.getMessage() : e.toString();
       throw new MethodologistSetupException(
@@ -275,6 +332,23 @@ public class VsumProjectBuildService {
   }
 
   /**
+   * Reads the package names of the uploaded metamodels.
+   *
+   * @param modelPairs metamodel/genmodel file pairs
+   * @return the names of the root packages of all readable metamodels
+   */
+  Set<String> extractMetamodelPackageNames(List<VsumService.ModelFiles> modelPairs) {
+    Set<String> packageNames = new HashSet<>();
+    for (VsumService.ModelFiles pair : modelPairs) {
+      MetamodelInfo info = readMetamodelInfo(pair.metamodelFile());
+      if (info != null && info.packageName != null && !info.packageName.isBlank()) {
+        packageNames.add(info.packageName);
+      }
+    }
+    return packageNames;
+  }
+
+  /**
    * Stores metamodel nsURI information for build-time EMF initialization.
    *
    * @param modelPairs metamodel/genmodel file pairs
@@ -414,6 +488,7 @@ public class VsumProjectBuildService {
      *
      * @param modelPairs metamodel/genmodel file pairs
      * @param reactionFiles copied reaction files
+     * @param constraintFiles copied OCL constraint files, may be empty
      * @param metamodelNamespaceMap map of model names to nsURIs
      * @return the produced artifact bytes
      * @throws IOException when file IO or artifact extraction fails
@@ -423,6 +498,7 @@ public class VsumProjectBuildService {
     byte[] generate(
         List<VsumService.ModelFiles> modelPairs,
         List<File> reactionFiles,
+        List<File> constraintFiles,
         Map<String, String> metamodelNamespaceMap)
         throws IOException, InterruptedException, MissingModelException;
   }

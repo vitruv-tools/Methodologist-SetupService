@@ -9,14 +9,13 @@
   <parent>
     <groupId>tools.vitruv</groupId>
     <artifactId>parent</artifactId>
-    <version>3.2.0</version>
+    <version>${versions.parent}</version>
   </parent>
 
   <!-- Project Information -->
   <artifactId>${packageName}</artifactId>
   <version>0.1.0-SNAPSHOT</version>
   <packaging>pom</packaging>
-  <#noparse>
   <name>Methodologist Template</name>
   <description />
 
@@ -31,8 +30,28 @@
   </modules>
 
   <properties>
-    <vitruv.version>3.2.3</vitruv.version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <vitruv-change.version>${versions.change}</vitruv-change.version>
+    <vitruv.version>${versions.framework}</vitruv.version>
+    <vitruv-dsls.version>${versions.dsls}</vitruv-dsls.version>
+    <vitruv-server.version>${versions.server}</vitruv-server.version>
+    <vitruvocl.version>${versions.vitruvocl}</vitruvocl.version>
   </properties>
+  <#noparse>
+
+  <!-- snapshot versions of Vitruvius artifacts are published to the Maven Central snapshots -->
+  <repositories>
+    <repository>
+      <id>central-snapshots</id>
+      <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+      <releases>
+        <enabled>false</enabled>
+      </releases>
+      <snapshots>
+        <enabled>true</enabled>
+      </snapshots>
+    </repository>
+  </repositories>
 
   <dependencyManagement>
     <dependencies>
@@ -40,32 +59,32 @@
       <dependency>
         <groupId>tools.vitruv</groupId>
         <artifactId>tools.vitruv.change.atomic</artifactId>
-        <version>${vitruv.version}</version>
+        <version>${vitruv-change.version}</version>
       </dependency>
       <dependency>
         <groupId>tools.vitruv</groupId>
         <artifactId>tools.vitruv.change.composite</artifactId>
-        <version>${vitruv.version}</version>
+        <version>${vitruv-change.version}</version>
       </dependency>
       <dependency>
         <groupId>tools.vitruv</groupId>
         <artifactId>tools.vitruv.change.interaction</artifactId>
-        <version>${vitruv.version}</version>
+        <version>${vitruv-change.version}</version>
       </dependency>
       <dependency>
         <groupId>tools.vitruv</groupId>
         <artifactId>tools.vitruv.change.propagation</artifactId>
-        <version>${vitruv.version}</version>
+        <version>${vitruv-change.version}</version>
       </dependency>
       <dependency>
         <groupId>tools.vitruv</groupId>
         <artifactId>tools.vitruv.change.testutils.integration</artifactId>
-        <version>${vitruv.version}</version>
+        <version>${vitruv-change.version}</version>
       </dependency>
       <dependency>
         <groupId>tools.vitruv</groupId>
         <artifactId>tools.vitruv.dsls.reactions.runtime</artifactId>
-        <version>${vitruv.version}</version>
+        <version>${vitruv-dsls.version}</version>
       </dependency>
       <dependency>
         <groupId>tools.vitruv</groupId>
@@ -76,6 +95,16 @@
         <groupId>tools.vitruv</groupId>
         <artifactId>tools.vitruv.framework.vsum</artifactId>
         <version>${vitruv.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>tools.vitruv</groupId>
+        <artifactId>tools.vitruv.server.remote</artifactId>
+        <version>${vitruv-server.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>tools.vitruv.dsls</groupId>
+        <artifactId>vitruvocl-language</artifactId>
+        <version>${vitruvocl.version}</version>
       </dependency>
 
       <!-- external dependencies-->

@@ -43,12 +43,14 @@
   </plugins>
 </build>
 
-<properties>
-  <vitruv.version>3.2.3</vitruv.version>
-</properties>
-
-
 <dependencies>
+<#if hasConstraints>
+  <!-- OCL constraints of the project, registered in VSUMExample -->
+  <dependency>
+    <groupId>tools.vitruv.dsls</groupId>
+    <artifactId>vitruvocl-language</artifactId>
+  </dependency>
+</#if>
 <!-- project dependencies -->
 <dependency>
   <#noparse>
@@ -68,7 +70,6 @@
   <dependency>
     <groupId>tools.vitruv</groupId>
     <artifactId>tools.vitruv.server.remote</artifactId>
-    <version>${vitruv.version}</version>
   </dependency>
 
   <!-- Vitruvius dependencies -->
