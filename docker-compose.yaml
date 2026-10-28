@@ -11,4 +11,10 @@ services:
         -XX:+UseContainerSupport
         -XX:MaxRAMPercentage=75.0
         -XX:InitialRAMPercentage=25.0
+    volumes:
+      # Keeps the Maven repository of the VSUM builds across container rebuilds
+      - maven-repo:/root/.m2
     restart: unless-stopped
+
+volumes:
+  maven-repo:
