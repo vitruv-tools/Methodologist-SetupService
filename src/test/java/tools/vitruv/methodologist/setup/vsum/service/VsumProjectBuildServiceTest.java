@@ -1,357 +1,147 @@
 package tools.vitruv.methodologist.setup.vsum.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyMap;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static tools.vitruv.methodologist.setup.vsum.service.TestFiles.fixture;
+import static tools.vitruv.methodologist.setup.vsum.service.TestFiles.text;
 
-import java.io.File;
-import java.nio.charset.StandardCharsets;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
+import java.util.jar.JarInputStream;
+import java.util.zip.ZipEntry;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.web.multipart.MultipartFile;
-import tools.vitruv.methodologist.setup.exception.MethodologistSetupException;
-import tools.vitruv.methodologist.setup.exception.MissingModelException;
+import tools.vitruv.methodologist.setup.vsum.service.build.MavenBuildRunner;
+import tools.vitruv.methodologist.setup.vsum.service.constraints.ConstraintsProcessor;
+import tools.vitruv.methodologist.setup.vsum.service.metamodel.MetamodelProcessor;
+import tools.vitruv.methodologist.setup.vsum.service.project.ProjectGenerator;
+import tools.vitruv.methodologist.setup.vsum.service.project.ProjectLayout;
+import tools.vitruv.methodologist.setup.vsum.service.reactions.ReactionsProcessor;
+import tools.vitruv.methodologist.setup.vsum.service.views.NeoJoinViewDefinitionProcessor;
 
 class VsumProjectBuildServiceTest {
 
-  private final VsumService vsumService = mock(VsumService.class);
-  private final VsumProjectBuildService service = new VsumProjectBuildService(vsumService);
-  @TempDir java.nio.file.Path tempDir;
+  private static final VsumBuildRequest TEMPLATE_REQUEST =
+      new VsumBuildRequest(
+          List.of(fixture("model.ecore"), fixture("model2.ecore")),
+          List.of(fixture("templateReactions.reactions")),
+          List.of(fixture("constraints.ocl")),
+          List.of(text("components.nj", "view stub")));
+
+  private final VsumBuildProperties properties = new VsumBuildProperties();
+  private final VsumProjectBuildService service =
+      new VsumProjectBuildService(
+          new MetamodelProcessor(),
+          new ReactionsProcessor(),
+          new ConstraintsProcessor(),
+          new NeoJoinViewDefinitionProcessor(),
+          new ProjectGenerator(properties),
+          new MavenBuildRunner(properties),
+          properties);
+
+  @TempDir Path projectRoot;
 
   @Test
-  void buildProjectArchive_shouldThrowWhenMetamodelFilesNull() {
-
-    assertThatThrownBy(
-            () ->
-                service.buildProjectArchive(
-                    null, List.of(mockMultipart("model.genmodel")), List.of()))
-        .isInstanceOf(MethodologistSetupException.class)
-        .hasMessageContaining("At least one metamodel");
-  }
-
-  @Test
-  void buildProjectArchive_shouldThrowWhenGenmodelFilesNull() {
-
-    assertThatThrownBy(
-            () ->
-                service.buildProjectArchive(List.of(mockMultipart("model.ecore")), null, List.of()))
-        .isInstanceOf(MethodologistSetupException.class);
-  }
-
-  @Test
-  void buildProjectArchive_shouldThrowWhenCountsDoNotMatch() {
-
-    assertThatThrownBy(
-            () ->
-                service.buildProjectArchive(
-                    List.of(mockMultipart("a.ecore"), mockMultipart("b.ecore")),
-                    List.of(mockMultipart("a.genmodel")),
-                    List.of()))
-        .isInstanceOf(MethodologistSetupException.class)
-        .hasMessageContaining("Please upload the same number of metamodel and genmodel files")
-        .hasMessageContaining("received 2 metamodel file(s) and 1 genmodel file(s)");
-  }
-
-  @Test
-  void buildProjectArchive_shouldThrowWhenMetamodelEmpty() {
-
-    MultipartFile empty =
-        new MockMultipartFile("file", "model.ecore", "application/xml", new byte[0]);
-
-    assertThatThrownBy(
-            () ->
-                service.buildProjectArchive(
-                    List.of(empty), List.of(mockMultipart("model.genmodel")), List.of()))
-        .isInstanceOf(MethodologistSetupException.class)
-        .hasMessageContaining("metamodel file");
-  }
-
-  @Test
-  void buildProjectArchive_shouldThrowWhenGenmodelEmpty() {
-
-    MultipartFile empty =
-        new MockMultipartFile("file", "model.genmodel", "application/xml", new byte[0]);
-
-    assertThatThrownBy(
-            () ->
-                service.buildProjectArchive(
-                    List.of(mockMultipart("model.ecore")), List.of(empty), List.of()))
-        .isInstanceOf(MethodologistSetupException.class)
-        .hasMessageContaining("genmodel file");
-  }
-
-  @Test
-  void buildProjectArchive_shouldBuildArchive() throws Exception {
-
-    byte[] expected = {1, 2, 3};
-
-    when(vsumService.generateProjectArchive(anyList(), anyList(), anyMap())).thenReturn(expected);
-
-    byte[] archive =
-        service.buildProjectArchive(
-            List.of(validMetamodel()),
-            List.of(mockMultipart("model.genmodel")),
-            List.of(reactionFile()));
-
-    assertThat(archive).isEqualTo(expected);
-
-    verify(vsumService).generateProjectArchive(anyList(), anyList(), anyMap());
-  }
-
-  @Test
-  void buildProjectArchive_shouldThrowWhenReactionFilesNull() {
-
-    assertThatThrownBy(
-            () ->
-                service.buildProjectArchive(
-                    List.of(validMetamodel()), List.of(mockMultipart("model.genmodel")), null))
-        .isInstanceOf(MethodologistSetupException.class)
-        .hasMessageContaining("reaction file is required");
-  }
-
-  @Test
-  void buildProjectArchive_shouldThrowWhenReactionFilesEmpty() {
-
-    assertThatThrownBy(
-            () ->
-                service.buildProjectArchive(
-                    List.of(validMetamodel()), List.of(mockMultipart("model.genmodel")), List.of()))
-        .isInstanceOf(MethodologistSetupException.class)
-        .hasMessageContaining("reaction file is required");
-  }
-
-  @Test
-  void buildProjectArchive_shouldThrowWhenReactionFileEmpty() {
-
-    MultipartFile empty =
-        new MockMultipartFile("file", "sample.reactions", "text/plain", new byte[0]);
-
-    assertThatThrownBy(
-            () ->
-                service.buildProjectArchive(
-                    List.of(validMetamodel()),
-                    List.of(mockMultipart("model.genmodel")),
-                    List.of(empty)))
-        .isInstanceOf(MethodologistSetupException.class)
-        .hasMessageContaining("reaction file");
-  }
-
-  @Test
-  void buildProjectArchive_shouldWrapIOException() throws Exception {
-
-    when(vsumService.generateProjectArchive(anyList(), anyList(), anyMap()))
-        .thenThrow(new java.io.IOException("boom"));
-
-    assertThatThrownBy(
-            () ->
-                service.buildProjectArchive(
-                    List.of(validMetamodel()),
-                    List.of(mockMultipart("model.genmodel")),
-                    List.of(reactionFile())))
-        .isInstanceOf(MethodologistSetupException.class)
-        .hasMessageContaining("Failed to build VSUM project archive");
-  }
-
-  @Test
-  void buildProjectArchive_shouldWrapMissingModelException() throws Exception {
-
-    when(vsumService.generateProjectArchive(anyList(), anyList(), anyMap()))
-        .thenThrow(new MissingModelException("missing"));
-
-    assertThatThrownBy(
-            () ->
-                service.buildProjectArchive(
-                    List.of(validMetamodel()),
-                    List.of(mockMultipart("model.genmodel")),
-                    List.of(reactionFile())))
-        .isInstanceOf(MethodologistSetupException.class);
-  }
-
-  @Test
-  void buildProjectArchive_shouldWrapInterruptedException() throws Exception {
-
-    when(vsumService.generateProjectArchive(anyList(), anyList(), anyMap()))
-        .thenThrow(new InterruptedException());
-
-    assertThatThrownBy(
-            () ->
-                service.buildProjectArchive(
-                    List.of(validMetamodel()),
-                    List.of(mockMultipart("model.genmodel")),
-                    List.of(reactionFile())))
-        .isInstanceOf(MethodologistSetupException.class);
-
-    assertThat(Thread.currentThread().isInterrupted()).isTrue();
-
-    Thread.interrupted();
-  }
-
-  @Test
-  void buildProjectJar_shouldThrowWhenCountsDoNotMatch() {
-
-    assertThatThrownBy(
-            () ->
-                service.buildProjectJar(
-                    List.of(mockMultipart("a.ecore"), mockMultipart("b.ecore")),
-                    List.of(mockMultipart("a.genmodel")),
-                    List.of()))
-        .isInstanceOf(MethodologistSetupException.class)
-        .hasMessageContaining("Please upload the same number of metamodel and genmodel files")
-        .hasMessageContaining("received 2 metamodel file(s) and 1 genmodel file(s)");
-  }
-
-  @Test
-  void buildProjectJar_shouldReturnJarBytes() throws Exception {
-
-    byte[] expected = {7, 8, 9};
-
-    when(vsumService.generateProjectJar(anyList(), anyList(), anyMap())).thenReturn(expected);
-
-    byte[] jar =
-        service.buildProjectJar(
-            List.of(validMetamodel()),
-            List.of(mockMultipart("model.genmodel")),
-            List.of(reactionFile()));
-
-    assertThat(jar).isEqualTo(expected);
-
-    verify(vsumService).generateProjectJar(anyList(), anyList(), anyMap());
-  }
-
-  @Test
-  void buildProjectJar_shouldThrowWhenReactionFilesEmpty() {
-
-    assertThatThrownBy(
-            () ->
-                service.buildProjectJar(
-                    List.of(validMetamodel()), List.of(mockMultipart("model.genmodel")), List.of()))
-        .isInstanceOf(MethodologistSetupException.class)
-        .hasMessageContaining("reaction file is required");
-  }
-
-  @Test
-  void buildProjectJar_shouldWrapIOException() throws Exception {
-
-    when(vsumService.generateProjectJar(anyList(), anyList(), anyMap()))
-        .thenThrow(new java.io.IOException("boom"));
-
-    assertThatThrownBy(
-            () ->
-                service.buildProjectJar(
-                    List.of(validMetamodel()),
-                    List.of(mockMultipart("model.genmodel")),
-                    List.of(reactionFile())))
-        .isInstanceOf(MethodologistSetupException.class)
-        .hasMessageContaining("Failed to build VSUM project");
-  }
-
-  @Test
-  void buildProjectJar_shouldWrapInterruptedException() throws Exception {
-
-    when(vsumService.generateProjectJar(anyList(), anyList(), anyMap()))
-        .thenThrow(new InterruptedException());
-
-    assertThatThrownBy(
-            () ->
-                service.buildProjectJar(
-                    List.of(validMetamodel()),
-                    List.of(mockMultipart("model.genmodel")),
-                    List.of(reactionFile())))
-        .isInstanceOf(MethodologistSetupException.class);
-
-    assertThat(Thread.currentThread().isInterrupted()).isTrue();
-
-    Thread.interrupted();
-  }
-
-  @Test
-  void extractMetamodelNamespaceMap_shouldExtractNamespaceInformation() {
-
-    File ecore =
-        writeTempEcore(
-            """
-                        <?xml version="1.0" encoding="UTF-8"?>
-                        <ecore:EPackage
-                            xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore"
-                            name="pcm"
-                            nsURI="http://pcm"/>
-                        """);
-
-    VsumService.ModelFiles pair =
-        new VsumService.ModelFiles(ecore, tempDir.resolve("test.genmodel").toFile());
-
-    Map<String, String> result = service.extractMetamodelNamespaceMap(List.of(pair));
-
-    assertThat(result).containsEntry("pcm", "http://pcm");
-  }
-
-  @Test
-  void extractMetamodelNamespaceMap_shouldIgnoreInvalidMetamodel() {
-
-    File invalid = writeTempFile("broken.ecore", "not xml");
-
-    VsumService.ModelFiles pair =
-        new VsumService.ModelFiles(invalid, tempDir.resolve("test.genmodel").toFile());
-
-    Map<String, String> result = service.extractMetamodelNamespaceMap(List.of(pair));
-
-    assertThat(result).isEmpty();
-  }
-
-  private MockMultipartFile mockMultipart(String filename) {
-
-    return new MockMultipartFile(
-        "file", filename, "application/octet-stream", "content".getBytes(StandardCharsets.UTF_8));
-  }
-
-  private MockMultipartFile reactionFile() {
-
-    return new MockMultipartFile(
-        "file",
-        "sample.reactions",
-        "text/plain",
-        """
-                import "pcm"
-                """
-            .getBytes(StandardCharsets.UTF_8));
-  }
-
-  private MockMultipartFile validMetamodel() {
-
-    return new MockMultipartFile(
-        "file",
-        "model.ecore",
-        "application/xml",
-        """
-                <?xml version="1.0" encoding="UTF-8"?>
-                <ecore:EPackage
-                    xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore"
-                    name="pcm"
-                    nsURI="http://pcm"/>
-                """
-            .getBytes(StandardCharsets.UTF_8));
-  }
-
-  private File writeTempEcore(String content) {
-
-    return writeTempFile("model.ecore", content);
-  }
-
-  private File writeTempFile(String name, String content) {
-
-    try {
-      File file = tempDir.resolve(name).toFile();
-      java.nio.file.Files.writeString(file.toPath(), content);
-      return file;
-    } catch (Exception e) {
-      throw new RuntimeException(e);
+  void generatesAProjectFollowingTheMethodologistTemplate() throws IOException {
+    service.generateProject(TEMPLATE_REQUEST, projectRoot);
+
+    for (String file :
+        List.of(
+            "pom.xml",
+            "model/pom.xml",
+            "model/.project",
+            "model/plugin.xml",
+            "model/META-INF/MANIFEST.MF",
+            "model/workflow/generate.mwe2",
+            "model/src/main/ecore/model.ecore",
+            "model/src/main/ecore/model.genmodel",
+            "model/src/main/ecore/model2.genmodel",
+            "consistency/pom.xml",
+            "consistency/src/main/reactions/tools/vitruv/methodologisttemplate/consistency/templateReactions.reactions",
+            "consistency/src/main/constraints/tools/vitruv/methodologisttemplate/consistency/constraints.ocl",
+            "views/src/main/neojoin/components.nj",
+            "vsum/pom.xml",
+            "vsum/src/main/java/tools/vitruv/methodologisttemplate/vsum/VSUMExample.java",
+            "vsum/src/test/java/tools/vitruv/methodologisttemplate/vsum/VSUMExampleTest.java")) {
+      assertTrue(Files.isRegularFile(projectRoot.resolve(file)), file);
     }
+
+    String rootPom = Files.readString(projectRoot.resolve("pom.xml"));
+    assertTrue(rootPom.contains("<version>${vitruv.version}</version>"), rootPom);
+    assertTrue(rootPom.contains("<vitruv.version>4.0.0</vitruv.version>"), rootPom);
+
+    String workflow = Files.readString(projectRoot.resolve("model/workflow/generate.mwe2"));
+    assertTrue(
+        workflow.contains(
+            "platform:/resource/tools.vitruv.methodologisttemplate.model/src/main/ecore/model2.genmodel"),
+        workflow);
+
+    String main =
+        Files.readString(
+            projectRoot.resolve(
+                "vsum/src/main/java/tools/vitruv/methodologisttemplate/vsum/VSUMExample.java"));
+    assertTrue(
+        main.contains(
+            "new mir.reactions.model2Model2.Model2Model2ChangePropagationSpecification()"),
+        main);
+    assertTrue(
+        main.contains("tools.vitruv.methodologisttemplate.model.model2.Model2Package.eINSTANCE"),
+        main);
+    assertTrue(
+        main.contains("\"tools/vitruv/methodologisttemplate/consistency/constraints.ocl\""), main);
+
+    assertTrue(
+        Files.readString(projectRoot.resolve("vsum/pom.xml")).contains("vitruvocl-language"));
+  }
+
+  @Test
+  void leavesOutVitruvOclWithoutConstraints() throws IOException {
+    VsumBuildRequest request =
+        new VsumBuildRequest(List.of(fixture("model.ecore")), List.of(), List.of(), List.of());
+
+    service.generateProject(request, projectRoot);
+
+    assertFalse(
+        Files.readString(projectRoot.resolve("vsum/pom.xml")).contains("vitruvocl-language"));
+    String main =
+        Files.readString(
+            projectRoot.resolve(
+                "vsum/src/main/java/tools/vitruv/methodologisttemplate/vsum/VSUMExample.java"));
+    assertFalse(main.contains("import tools.vitruv.dsls.vitruvocl"), main);
+  }
+
+  /**
+   * Runs the real Maven build. Needs Maven and access to the Vitruvius artifacts, so it only runs
+   * with {@code -Dvsum.integration=true}.
+   */
+  @Test
+  @EnabledIfSystemProperty(named = "vsum.integration", matches = "true")
+  void buildsAnExecutableVsumJar() throws IOException {
+    byte[] jar = service.buildProjectJar(TEMPLATE_REQUEST);
+
+    Set<String> entries = new HashSet<>();
+    try (JarInputStream input = new JarInputStream(new ByteArrayInputStream(jar))) {
+      assertTrue(
+          input
+              .getManifest()
+              .getMainAttributes()
+              .getValue("Main-Class")
+              .equals(ProjectLayout.VSUM_PACKAGE + "." + ProjectLayout.VSUM_MAIN_CLASS));
+      for (ZipEntry entry = input.getNextEntry(); entry != null; entry = input.getNextEntry()) {
+        entries.add(entry.getName());
+      }
+    }
+    assertTrue(
+        entries.contains(
+            "mir/reactions/model2Model2/Model2Model2ChangePropagationSpecification.class"));
+    assertTrue(
+        entries.contains("tools/vitruv/methodologisttemplate/model/model/ModelPackage.class"));
+    assertTrue(entries.contains("tools/vitruv/methodologisttemplate/consistency/constraints.ocl"));
   }
 }

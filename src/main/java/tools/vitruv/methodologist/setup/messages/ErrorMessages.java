@@ -3,7 +3,6 @@ package tools.vitruv.methodologist.setup.messages;
 /** Centralized error messages for the Methodologist Setup Service. */
 public final class ErrorMessages {
 
-  public static final String GENMODEL_FILE_NOT_FOUND = "GenModel file not found: %s";
   public static final String GENMODEL_FILE_READ_ERROR = "Could not read genmodel file: %s";
   public static final String GENMODEL_FILE_WRITE_ERROR = "Could not write genmodel file: %s";
   public static final String GENMODEL_INVALID_FORMAT = "Not a valid GenModel: %s";
@@ -16,17 +15,11 @@ public final class ErrorMessages {
   public static final String FILE_NULL_ERROR = "File must not be null";
   public static final String MULTIPART_FILE_EMPTY_ERROR = "Uploaded file is empty";
   public static final String MULTIPART_FILE_UPLOAD_ERROR = "Failed to save uploaded file";
-  public static final String XML_STREAM_ERROR = "Failed to process XML stream";
   public static final String UNEXPECTED_ERROR = "An unexpected error occurred";
+  public static final String UPLOAD_TOO_LARGE =
+      "The uploaded files exceed the maximum allowed upload size";
   public static final String VSUM_JAR_NOT_FOUND =
       "Expected VSUM jar was not produced by the build: %s";
-  public static final String VSUM_REACTION_FILES_REQUIRED =
-      "At least one reaction file is required";
-  public static final String EMF_CLASSES_DIR_NOT_FOUND = "Classes directory not found: {}";
-  public static final String EMF_CLASSES_LOAD_PACKAGE_ERROR = "Could not load package from {}: {}";
-  public static final String EMF_CLASSES_INIT_ERROR =
-      "Error initializing EMF packages from classes directory: {}";
-  public static final String ECORE_FILE_NOT_FOUND = "ECore file not found: %s";
   public static final String ECORE_FILE_INVALID_FORMAT = "Not a valid ECore file: %s";
   public static final String ECORE_FILE_READ_ERROR = "Could not read ecore file: %s";
   public static final String GENMODEL_GENERATION_ERROR =
