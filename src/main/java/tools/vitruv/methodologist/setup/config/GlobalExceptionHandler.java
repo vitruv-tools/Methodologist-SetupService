@@ -9,6 +9,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import tools.vitruv.methodologist.setup.exception.ErrorResponseDTO;
 import tools.vitruv.methodologist.setup.exception.GenmodelException;
 import tools.vitruv.methodologist.setup.exception.MethodologistSetupException;
@@ -35,8 +38,31 @@ public class GlobalExceptionHandler {
       throws IOException {
     log.error("MethodologistSetupException occurred: {}", ex.getMessage(), ex);
 
+    writeErrorResponse(response, request, ex.getStatus(), ex.getErrorCode(), ex.getMessage());
+  }
+
+  /**
+   * Handles requests that lack a required multipart part or request parameter.
+   *
+   * @param ex the exception
+   * @param request the web request
+   */
+  @ExceptionHandler({MissingServletRequestPartException.class, MultipartException.class})
+  public void handleMalformedMultipartRequest(
+      Exception ex, HttpServletRequest request, HttpServletResponse response) throws IOException {
+    if (ex instanceof MaxUploadSizeExceededException) {
+      log.warn("Upload rejected: {}", ex.getMessage());
+      writeErrorResponse(
+          response,
+          request,
+          HttpStatus.CONTENT_TOO_LARGE,
+          "UPLOAD_TOO_LARGE",
+          ErrorMessages.UPLOAD_TOO_LARGE);
+      return;
+    }
+    log.warn("Malformed multipart request: {}", ex.getMessage());
     writeErrorResponse(
-        response, request, HttpStatus.BAD_REQUEST, ex.getErrorCode(), ex.getMessage());
+        response, request, HttpStatus.BAD_REQUEST, "INVALID_REQUEST", ex.getMessage());
   }
 
   /**

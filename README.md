@@ -1,16 +1,15 @@
 # Methodologist Setup Service
 
 A Spring Boot REST API service for the Vitruv methodologist workflow. It validates and standardizes
-GenModel files for MWE2 compatibility, and generates ready-to-build VSUM projects from uploaded
-metamodel, genmodel, and reaction files.
+GenModel files for MWE2 compatibility, and builds VSUMs from uploaded metamodels, reactions,
+constraints, and view definitions.
 
 ## Features
 
 - **GenModel Validation**: Inspect GenModel files for compliance issues without modifying them
 - **GenModel Processing**: Apply standardization rules and download the corrected file
-- **VSUM Project Generation**: Build a complete VSUM project from metamodels, genmodels, and
-  reactions, returned as a zip archive
-- **VSUM Jar Build**: Build the project and return only the executable jar-with-dependencies
+- **VSUM Build**: Generate genmodels and a Methodologist-Template project from metamodels, reactions,
+  and VitruvOCL constraints, build and smoke-test it, and return the project zip or executable jar
 - **OpenAPI / Swagger UI**: Interactive API documentation
 - **Error Handling**: Centralized exception handling with structured error responses
 - **Docker Support**: Dockerfile and Compose setup included
@@ -89,48 +88,43 @@ curl -X POST -F "file=@mymodel.genmodel" \
   http://localhost:8090/api/genmodel/process
 ```
 
-### Build VSUM Project
+### Build VSUM
 
-**POST** `/api/vsum/build` (`multipart/form-data`)
+**POST** `/api/vsum/build` returns the generated project as a zip; **POST** `/api/vsum/jar` returns the
+executable VSUM jar, which hosts the VSUM in a Vitruvius server (`java -jar <jar> [port]`, type `quit` to stop).
 
-Uploads metamodel, genmodel, and reaction files, generates the project from FreeMarker templates,
-builds it, and returns the whole project as a zip archive (`vsum-project-<timestamp>.zip`).
-
-Parts:
-
-| Part | Required | Description |
-| --- | --- | --- |
-| `metamodelFiles` | yes | One or more `.ecore` metamodel files |
-| `genmodelFiles` | yes | `.genmodel` files, paired **by index** with `metamodelFiles` |
-| `reactionFiles` | yes | One or more `.reactions` files |
-
-`metamodelFiles` and `genmodelFiles` must have the same count — index *n* of one is matched with
-index *n* of the other. Reaction imports are normalized against the uploaded metamodels' nsURIs.
+| Part              | Required | Content                                                   |
+|-------------------|----------|-----------------------------------------------------------|
+| `metamodelFiles`  | yes      | Ecore metamodels (`.ecore`)                               |
+| `reactionFiles`   | no       | Reactions consistency specifications (`.reactions`)       |
+| `constraintFiles` | no       | VitruvOCL constraints (`.ocl`)                            |
+| `viewFiles`       | no       | NeoJoin view definitions (stored in the project, not compiled yet) |
 
 ```bash
 curl -X POST \
-  -F "metamodelFiles=@model.ecore" \
-  -F "genmodelFiles=@model.genmodel" \
-  -F "reactionFiles=@example.reactions" \
-  -o vsum-project.zip \
-  http://localhost:8090/api/vsum/build
+  -F metamodelFiles=@model.ecore -F metamodelFiles=@model2.ecore \
+  -F reactionFiles=@templateReactions.reactions \
+  -F constraintFiles=@constraints.ocl \
+  -o vsum.jar http://localhost:8090/api/vsum/jar
 ```
 
-### Build VSUM Jar
+Genmodels are not uploaded; they are generated from the metamodels. The pipeline:
 
-**POST** `/api/vsum/jar` (`multipart/form-data`)
+1. Validates the uploads (non-empty, expected extension, unique names).
+2. Loads the metamodels, resolves references between them (relative, `platform:/resource`, or nsURI),
+   validates them with EMF, and generates matching genmodels.
+3. Checks that every Reactions `import` refers to an uploaded nsURI.
+4. Generates a project following the [Methodologist Template](https://github.com/vitruv-tools/Methodologist-Template)
+   (`model`, `consistency`, `vsum`), with a smoke test that creates and reloads the VSUM and compiles the constraints.
+5. Runs `mvn clean verify`.
 
-Same inputs and pairing rules as `/api/vsum/build`, but returns only the executable
-jar-with-dependencies produced under `vsum/target` (`application/java-archive`).
+Invalid inputs are rejected with `400` before Maven runs (`VSUM_INPUT_ERROR`, `VSUM_METAMODEL_ERROR`,
+`VSUM_REACTIONS_ERROR`). If the generated VSUM does not build, the response is `422` (`VSUM_BUILD_FAILED`) with
+the relevant Maven errors; a timeout is reported as `504` (`VSUM_BUILD_TIMEOUT`).
 
-```bash
-curl -X POST \
-  -F "metamodelFiles=@model.ecore" \
-  -F "genmodelFiles=@model.genmodel" \
-  -F "reactionFiles=@example.reactions" \
-  -o vsum.jar \
-  http://localhost:8090/api/vsum/jar
-```
+Build settings are configured with `setup.vsum.*` properties (see `VsumBuildProperties`), e.g.
+`setup.vsum.build-timeout`, `setup.vsum.max-concurrent-builds`, `setup.vsum.maven-arguments`,
+the Vitruvius/VitruvOCL versions, and `setup.vsum.keep-failed-workspaces` for debugging.
 
 ## Standardization Rules
 
@@ -157,20 +151,19 @@ The GenModel endpoints apply these normalization rules:
 src/main/java/tools/vitruv/methodologist/setup/
 ├── model/
 │   ├── controller/           # GenModel REST controller + DTOs
-│   └── service/              # GenModel precheck and file services
+│   └── service/              # GenModel precheck, file, and ecore-to-genmodel services
 ├── vsum/
 │   ├── controller/           # VSUM REST controller
-│   └── service/              # Project generation, templating, and build
-├── config/                   # Swagger, Vitruv config, exception handling, class loading
-├── emf/                      # EMF model initialization
+│   └── service/              # VSUM build pipeline (metamodel, reactions, constraints, views,
+│                             # project generation, Maven build)
+├── config/                   # Swagger, exception handling
 ├── exception/                # Custom exceptions and error DTOs
 ├── log/                      # Request/response logging filter
 ├── messages/                 # Error and info message constants
-├── util/                     # File helpers
 ├── ResponseTemplateDto.java  # Generic API response envelope
 └── MethodologistSetupServiceApplication.java
 
-src/main/resources/templates/ # FreeMarker templates for generated VSUM projects
+src/main/resources/templates/vsum/ # FreeMarker templates for generated VSUM projects
 ```
 
 ## Health Check
@@ -218,7 +211,10 @@ All requests return appropriate HTTP status codes:
 
 - `200 OK`: Successful operation
 - `400 Bad Request`: Invalid input or processing error
+- `413 Content Too Large`: Uploads exceed the configured size limit
+- `422 Unprocessable Content`: Invalid GenModel, or the generated VSUM does not build
 - `500 Internal Server Error`: Unexpected server error
+- `504 Gateway Timeout`: The VSUM build exceeded its timeout
 
 Errors are handled centrally in `GlobalExceptionHandler` and returned as structured responses with
 a message and error code to help with debugging.
