@@ -2,7 +2,7 @@
 
 A Spring Boot REST API service for the Vitruv methodologist workflow. It validates and standardizes
 GenModel files for MWE2 compatibility, and generates ready-to-build VSUM projects from uploaded
-metamodel, genmodel, and reaction files.
+metamodel, genmodel, reaction, and OCL constraint files.
 
 ## Features
 
@@ -11,6 +11,8 @@ metamodel, genmodel, and reaction files.
 - **VSUM Project Generation**: Build a complete VSUM project from metamodels, genmodels, and
   reactions, returned as a zip archive
 - **VSUM Jar Build**: Build the project and return only the executable jar-with-dependencies
+- **OCL Constraints**: Build VitruvOCL constraint files into the VSUM, where its Vitruv server
+  lists, validates, and manages them via REST
 - **OpenAPI / Swagger UI**: Interactive API documentation
 - **Error Handling**: Centralized exception handling with structured error responses
 - **Docker Support**: Dockerfile and Compose setup included
@@ -103,6 +105,7 @@ Parts:
 | `metamodelFiles` | yes | One or more `.ecore` metamodel files |
 | `genmodelFiles` | yes | `.genmodel` files, paired **by index** with `metamodelFiles` |
 | `reactionFiles` | yes | One or more `.reactions` files |
+| `constraintFiles` | no | VitruvOCL constraint files (`.ocl`), see [Constraints](#constraints) |
 
 `metamodelFiles` and `genmodelFiles` must have the same count — index *n* of one is matched with
 index *n* of the other. Reaction imports are normalized against the uploaded metamodels' nsURIs.
@@ -112,9 +115,24 @@ curl -X POST \
   -F "metamodelFiles=@model.ecore" \
   -F "genmodelFiles=@model.genmodel" \
   -F "reactionFiles=@example.reactions" \
+  -F "constraintFiles=@Prices.ocl" \
   -o vsum-project.zip \
   http://localhost:8090/api/vsum/build
 ```
+
+#### Constraints
+
+Each constraint file is copied to `vsum/src/main/resources/constraints/` and registered in the
+generated `VSUMExample` with the `VitruvOclConstraintChecker` of VitruvOCL. The running VSUM then
+lists, validates, creates, updates, and deletes its constraints via the constraint endpoints of the
+[Vitruv-Server](https://github.com/vitruv-tools/Vitruv-Server) (`/vsum/constraints`).
+
+- The file name is kept, e.g. the name of a rule set; only characters that are invalid in file
+  names are replaced, and duplicates get a numeric suffix.
+- Every context must name its metamodel (`context model::Component inv …`), and the metamodel must
+  be one of the uploaded ones. Otherwise the request fails fast with `400` and error code
+  `VSUM_INPUT_ERROR`; all other errors in a constraint show up when the VSUM loads it.
+- Empty constraint files are rejected with `400`.
 
 ### Build VSUM Jar
 
@@ -190,6 +208,27 @@ Default settings:
 - Swagger UI: `/swagger-ui.html`
 - OpenAPI docs: `/api-docs`
 - Log level for `tools.vitruv.methodologist`: `DEBUG`
+
+### Versions of generated projects
+
+Generated VSUM projects use the Vitruvius versions of `GeneratedProjectVersions`, which can be
+overridden with `vsum.generator.versions.{parent,change,framework,dsls,server,vitruvocl}`:
+
+| Property | Default | Artifacts |
+| --- | --- | --- |
+| `parent` | `4.0.0` | `tools.vitruv:parent` |
+| `change` | `4.0.1` | `tools.vitruv.change.*` |
+| `framework` | `4.0.2-SNAPSHOT` | `tools.vitruv.framework.*`, must provide the constraint SPI |
+| `dsls` | `4.0.0` | Reactions language and runtime |
+| `server` | `4.0.1-SNAPSHOT` | `tools.vitruv.server.remote`, must provide the constraint endpoints |
+| `vitruvocl` | `0.1.0-SNAPSHOT` | `tools.vitruv.dsls:vitruvocl-language` |
+
+Snapshot versions are resolved from the Maven Central snapshots. The service builds the projects
+with the local Maven installation, so artifacts installed into the local repository
+(`mvn install`) are used as well — e.g. to test unreleased changes of Vitruv, VitruvOCL, or the
+Vitruv-Server. When running the service in Docker, the container has its own Maven repository.
+
+Generated VSUM jars need Java 21 to run.
 
 ## Technologies
 
