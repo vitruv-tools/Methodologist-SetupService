@@ -31,7 +31,7 @@ constraints, and view definitions.
 ### Run Locally
 
 ```bash
-java -jar target/methodologist-setup-service-0.0.1-SNAPSHOT.jar
+java -jar target/methodologist-setup-service-1.0.1.jar
 ```
 
 The service starts on `http://localhost:8090`.
@@ -43,7 +43,7 @@ The `Dockerfile` copies the jar from the build context root, and `target/` is ex
 
 ```bash
 ./mvnw clean package
-cp target/methodologist-setup-service-0.0.1-SNAPSHOT.jar .
+cp target/methodologist-setup-service-1.0.1.jar .
 docker compose up --build
 ```
 
