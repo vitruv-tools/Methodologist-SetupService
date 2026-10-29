@@ -28,8 +28,9 @@ import tools.vitruv.methodologist.setup.vsum.service.views.ViewDefinitionProcess
  * Builds a VSUM from a methodologist's metamodels, reactions, constraints, and view definitions.
  *
  * <p>The pipeline validates all inputs before anything is built, generates the genmodels from the
- * metamodels, generates a project following the Methodologist Template, and builds it with Maven,
- * including a smoke test that instantiates the VSUM. The temporary workspace is always deleted.
+ * metamodels, and generates a project following the Methodologist Template. The project is either
+ * returned as is, for the user to build, or built with Maven, including a smoke test that
+ * instantiates the VSUM, to return the VSUM jar. The temporary workspace is always deleted.
  */
 @Slf4j
 @Service
@@ -45,13 +46,28 @@ public class VsumProjectBuildService {
   private final VsumBuildProperties properties;
 
   /**
-   * Builds the VSUM and returns the generated project as a zip archive (without build output).
+   * Generates the project and returns it as a zip archive without building it, so that it can be
+   * built with {@code mvn clean verify} like the Methodologist Template.
    *
-   * @param request the build inputs
+   * @param request the project inputs
    * @return the zip archive bytes
    */
-  public byte[] buildProjectArchive(VsumBuildRequest request) {
-    return build(request, VsumProjectBuildService::zipProject);
+  public byte[] generateProjectArchive(VsumBuildRequest request) {
+    Path workspace = null;
+    try {
+      workspace = Files.createTempDirectory("vsum-project-");
+      Path projectRoot = workspace.resolve("project");
+      generateProject(request, projectRoot);
+      return zipProject(projectRoot);
+    } catch (IOException e) {
+      throw new MethodologistSetupException(
+          VsumErrorCodes.BUILD_ERROR,
+          "Failed to generate the VSUM project: " + e.getMessage(),
+          HttpStatus.INTERNAL_SERVER_ERROR,
+          e);
+    } finally {
+      deleteRecursively(workspace);
+    }
   }
 
   /**
@@ -61,10 +77,6 @@ public class VsumProjectBuildService {
    * @return the jar bytes
    */
   public byte[] buildProjectJar(VsumBuildRequest request) {
-    return build(request, VsumProjectBuildService::readVsumJar);
-  }
-
-  private byte[] build(VsumBuildRequest request, ArtifactExtractor extractor) {
     Path workspace = null;
     boolean succeeded = false;
     try {
@@ -72,7 +84,7 @@ public class VsumProjectBuildService {
       Path projectRoot = workspace.resolve("project");
       generateProject(request, projectRoot);
       mavenBuildRunner.build(projectRoot, workspace);
-      byte[] artifact = extractor.extract(projectRoot);
+      byte[] artifact = readVsumJar(projectRoot);
       succeeded = true;
       return artifact;
     } catch (IOException e) {
@@ -120,7 +132,7 @@ public class VsumProjectBuildService {
     return Files.readAllBytes(jar);
   }
 
-  /** Zips the project sources, leaving out the {@code target} build output directories. */
+  /** Zips the project sources, leaving out any {@code target} build output directories. */
   private static byte[] zipProject(Path projectRoot) throws IOException {
     ByteArrayOutputStream bytes = new ByteArrayOutputStream();
     try (ZipOutputStream zip = new ZipOutputStream(bytes);
@@ -170,11 +182,5 @@ public class VsumProjectBuildService {
     } catch (IOException e) {
       log.warn("Could not clean up workspace {}: {}", root, e.getMessage());
     }
-  }
-
-  /** Extracts the response bytes from a successfully built project. */
-  @FunctionalInterface
-  private interface ArtifactExtractor {
-    byte[] extract(Path projectRoot) throws IOException;
   }
 }

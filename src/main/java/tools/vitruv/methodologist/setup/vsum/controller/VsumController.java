@@ -33,7 +33,8 @@ public class VsumController {
   private final VsumProjectBuildService vsumProjectBuildService;
 
   /**
-   * Builds a VSUM from the uploaded files and returns the generated project as a zip archive.
+   * Generates a VSUM project following the Methodologist Template from the uploaded files and
+   * returns it as a zip archive, without building it.
    *
    * @param metamodelFiles Ecore metamodels
    * @param reactionFiles Reactions consistency specifications
@@ -41,23 +42,21 @@ public class VsumController {
    * @param viewFiles NeoJoin view definitions
    * @return zip file response containing the generated project
    */
-  @PostMapping(value = "/build", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @PostMapping(value = "/project", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @Operation(
-      summary = "Build VSUM project",
+      summary = "Generate VSUM project",
       description =
-          "Generates genmodels from the metamodels, generates a VSUM project following the"
-              + " Methodologist Template, builds and smoke-tests it with Maven, and returns the"
-              + " project sources as a zip archive",
+          "Validates the inputs, generates genmodels from the metamodels and a VSUM project"
+              + " following the Methodologist Template, and returns the project sources as a zip"
+              + " archive. The project is not built; build it with 'mvn clean verify'",
       responses = {
         @ApiResponse(
             responseCode = "200",
-            description = "Project built successfully",
+            description = "Project generated successfully",
             content = @Content(mediaType = "application/zip")),
-        @ApiResponse(responseCode = "400", description = "Invalid input files"),
-        @ApiResponse(responseCode = "422", description = "The generated VSUM does not build"),
-        @ApiResponse(responseCode = "504", description = "The build timed out")
+        @ApiResponse(responseCode = "400", description = "Invalid input files")
       })
-  public ResponseEntity<byte[]> buildProject(
+  public ResponseEntity<byte[]> generateProject(
       @Parameter(description = "Ecore metamodel files", required = true)
           @RequestPart("metamodelFiles")
           List<MultipartFile> metamodelFiles,
@@ -72,7 +71,7 @@ public class VsumController {
           List<MultipartFile> viewFiles) {
     VsumBuildRequest request =
         VsumBuildRequest.fromMultipart(metamodelFiles, reactionFiles, constraintFiles, viewFiles);
-    byte[] archive = vsumProjectBuildService.buildProjectArchive(request);
+    byte[] archive = vsumProjectBuildService.generateProjectArchive(request);
     return attachment(archive, "application/zip", generateArchiveFilename());
   }
 
@@ -89,8 +88,9 @@ public class VsumController {
   @Operation(
       summary = "Build VSUM jar",
       description =
-          "Same as /build, but returns the executable VSUM jar-with-dependencies, which hosts the"
-              + " VSUM in a Vitruvius server",
+          "Generates the project like /project, builds and smoke-tests it with Maven, and returns"
+              + " the executable VSUM jar-with-dependencies, which hosts the VSUM in a Vitruvius"
+              + " server",
       responses = {
         @ApiResponse(
             responseCode = "200",

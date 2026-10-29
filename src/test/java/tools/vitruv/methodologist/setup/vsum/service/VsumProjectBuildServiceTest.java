@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.jar.JarInputStream;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.io.TempDir;
@@ -98,6 +99,28 @@ class VsumProjectBuildServiceTest {
 
     assertTrue(
         Files.readString(projectRoot.resolve("vsum/pom.xml")).contains("vitruvocl-language"));
+  }
+
+  @Test
+  void zipsTheGeneratedProjectWithoutBuildingIt() throws IOException {
+    byte[] archive = service.generateProjectArchive(TEMPLATE_REQUEST);
+
+    Set<String> entries = new HashSet<>();
+    try (ZipInputStream input = new ZipInputStream(new ByteArrayInputStream(archive))) {
+      for (ZipEntry entry = input.getNextEntry(); entry != null; entry = input.getNextEntry()) {
+        entries.add(entry.getName());
+      }
+    }
+    for (String file :
+        List.of(
+            "pom.xml",
+            "model/pom.xml",
+            "model/src/main/ecore/model.genmodel",
+            "consistency/src/main/reactions/tools/vitruv/methodologisttemplate/consistency/templateReactions.reactions",
+            "vsum/src/main/java/tools/vitruv/methodologisttemplate/vsum/VSUMExample.java")) {
+      assertTrue(entries.contains(file), file);
+    }
+    assertFalse(entries.stream().anyMatch(entry -> entry.contains("target/")), entries.toString());
   }
 
   @Test

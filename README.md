@@ -90,8 +90,10 @@ curl -X POST -F "file=@mymodel.genmodel" \
 
 ### Build VSUM
 
-**POST** `/api/vsum/build` returns the generated project as a zip; **POST** `/api/vsum/jar` returns the
-executable VSUM jar, which hosts the VSUM in a Vitruvius server (`java -jar <jar> [port]`, type `quit` to stop).
+**POST** `/api/vsum/project` returns the generated project as a zip, laid out like the Methodologist
+Template and not built; build it yourself with `mvn clean verify`. **POST** `/api/vsum/jar` builds the
+project with Maven and returns the executable VSUM jar, which hosts the VSUM in a Vitruvius server
+(`java -jar <jar> [port]`, type `quit` to stop).
 
 | Part              | Required | Content                                                   |
 |-------------------|----------|-----------------------------------------------------------|

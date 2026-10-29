@@ -45,8 +45,8 @@ class VsumControllerErrorHandlingTest {
   }
 
   @Test
-  void buildPassesAllUploadsToTheBuildService() throws Exception {
-    when(buildService.buildProjectArchive(any())).thenReturn("zip".getBytes());
+  void projectPassesAllUploadsToTheBuildService() throws Exception {
+    when(buildService.generateProjectArchive(any())).thenReturn("zip".getBytes());
     MockMultipartFile constraints =
         new MockMultipartFile("constraintFiles", "c.ocl", "text/plain", "context".getBytes());
     MockMultipartFile view =
@@ -54,7 +54,7 @@ class VsumControllerErrorHandlingTest {
 
     mockMvc
         .perform(
-            multipart("/api/vsum/build")
+            multipart("/api/vsum/project")
                 .file(METAMODEL)
                 .file(REACTIONS)
                 .file(constraints)
@@ -64,7 +64,7 @@ class VsumControllerErrorHandlingTest {
         .andExpect(content().bytes("zip".getBytes()));
 
     verify(buildService)
-        .buildProjectArchive(
+        .generateProjectArchive(
             argThat(
                 request ->
                     request.metamodels().get(0).fileName().equals("a.ecore")
@@ -86,7 +86,7 @@ class VsumControllerErrorHandlingTest {
   @Test
   void missingMetamodelsAreABadRequest() throws Exception {
     mockMvc
-        .perform(multipart("/api/vsum/build").file(REACTIONS))
+        .perform(multipart("/api/vsum/project").file(REACTIONS))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.errorCode").value("INVALID_REQUEST"));
     verifyNoInteractions(buildService);
@@ -98,7 +98,7 @@ class VsumControllerErrorHandlingTest {
         new MockMultipartFile("metamodelFiles", "a.genmodel", "application/xml", "<g/>".getBytes());
 
     mockMvc
-        .perform(multipart("/api/vsum/build").file(genmodel))
+        .perform(multipart("/api/vsum/project").file(genmodel))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.errorCode").value(VsumErrorCodes.INPUT_ERROR));
     verifyNoInteractions(buildService);
@@ -106,7 +106,7 @@ class VsumControllerErrorHandlingTest {
 
   @Test
   void buildFailuresUseTheStatusOfTheException() throws Exception {
-    when(buildService.buildProjectArchive(any()))
+    when(buildService.buildProjectJar(any()))
         .thenThrow(
             new MethodologistSetupException(
                 VsumErrorCodes.BUILD_FAILED,
@@ -116,9 +116,9 @@ class VsumControllerErrorHandlingTest {
 
     mockMvc
         .perform(
-            multipart("/api/vsum/build")
+            multipart("/api/vsum/jar")
                 .file(METAMODEL)
-                .accept(MediaType.parseMediaType("application/zip")))
+                .accept(MediaType.parseMediaType("application/java-archive")))
         .andExpect(status().isUnprocessableContent())
         .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
         .andExpect(jsonPath("$.errorCode").value(VsumErrorCodes.BUILD_FAILED))
