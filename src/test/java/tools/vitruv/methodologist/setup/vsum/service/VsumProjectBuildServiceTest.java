@@ -73,8 +73,9 @@ class VsumProjectBuildServiceTest {
     }
 
     String rootPom = Files.readString(projectRoot.resolve("pom.xml"));
-    assertTrue(rootPom.contains("<version>${vitruv.version}</version>"), rootPom);
-    assertTrue(rootPom.contains("<vitruv.version>4.0.0</vitruv.version>"), rootPom);
+    assertTrue(rootPom.contains("<version>${vitruv.change.version}</version>"), rootPom);
+    assertTrue(rootPom.contains("<vitruv.change.version>4.0.1</vitruv.change.version>"), rootPom);
+    assertTrue(rootPom.contains("<vitruv.dsls.version>4.0.0</vitruv.dsls.version>"), rootPom);
 
     String workflow = Files.readString(projectRoot.resolve("model/workflow/generate.mwe2"));
     assertTrue(

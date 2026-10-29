@@ -34,8 +34,19 @@ public class VsumBuildProperties {
   /** Version of the {@code tools.vitruv:parent} build parent. */
   private String parentVersion = "4.0.0";
 
-  /** Version of the Vitruvius framework. */
-  private String vitruvVersion = "4.0.0";
+  // Vitruvius is released per repository, so the artifact groups can have different versions.
+
+  /** Version of the Vitruv-Change artifacts ({@code tools.vitruv.change.*}). */
+  private String vitruvChangeVersion = "4.0.1";
+
+  /** Version of the Vitruv framework artifacts ({@code tools.vitruv.framework.*}). */
+  private String vitruvFrameworkVersion = "4.0.1";
+
+  /** Version of the Vitruv-DSLs artifacts ({@code tools.vitruv.dsls.*}, e.g. Reactions). */
+  private String vitruvDslsVersion = "4.0.0";
+
+  /** Version of the Vitruv-Server artifacts ({@code tools.vitruv.server.*}). */
+  private String vitruvServerVersion = "4.0.0";
 
   /** Version of VitruvOCL. */
   private String vitruvoclVersion = "0.1.0-SNAPSHOT";
@@ -50,5 +61,5 @@ public class VsumBuildProperties {
   private String junitVersion = "6.1.3";
 
   /** Version of the maven-assembly-plugin building the executable VSUM jar. */
-  private String assemblyPluginVersion = "3.7.1";
+  private String assemblyPluginVersion = "3.8.0";
 }

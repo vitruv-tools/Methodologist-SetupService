@@ -28,7 +28,11 @@
   </modules>
 
   <properties>
-    <vitruv.version>[=vitruvVersion]</vitruv.version>
+    <!-- Vitruvius is released per repository, so the artifact groups have their own versions -->
+    <vitruv.change.version>[=vitruvChangeVersion]</vitruv.change.version>
+    <vitruv.framework.version>[=vitruvFrameworkVersion]</vitruv.framework.version>
+    <vitruv.dsls.version>[=vitruvDslsVersion]</vitruv.dsls.version>
+    <vitruv.server.version>[=vitruvServerVersion]</vitruv.server.version>
     <vitruvocl.version>[=vitruvoclVersion]</vitruvocl.version>
   </properties>
 
@@ -38,52 +42,52 @@
       <dependency>
         <groupId>tools.vitruv</groupId>
         <artifactId>tools.vitruv.change.atomic</artifactId>
-        <version>${vitruv.version}</version>
+        <version>${vitruv.change.version}</version>
       </dependency>
       <dependency>
         <groupId>tools.vitruv</groupId>
         <artifactId>tools.vitruv.change.composite</artifactId>
-        <version>${vitruv.version}</version>
+        <version>${vitruv.change.version}</version>
       </dependency>
       <dependency>
         <groupId>tools.vitruv</groupId>
         <artifactId>tools.vitruv.change.correspondence</artifactId>
-        <version>${vitruv.version}</version>
+        <version>${vitruv.change.version}</version>
       </dependency>
       <dependency>
         <groupId>tools.vitruv</groupId>
         <artifactId>tools.vitruv.change.interaction</artifactId>
-        <version>${vitruv.version}</version>
+        <version>${vitruv.change.version}</version>
       </dependency>
       <dependency>
         <groupId>tools.vitruv</groupId>
         <artifactId>tools.vitruv.change.propagation</artifactId>
-        <version>${vitruv.version}</version>
+        <version>${vitruv.change.version}</version>
       </dependency>
       <dependency>
         <groupId>tools.vitruv</groupId>
         <artifactId>tools.vitruv.change.testutils.integration</artifactId>
-        <version>${vitruv.version}</version>
+        <version>${vitruv.change.version}</version>
       </dependency>
       <dependency>
         <groupId>tools.vitruv</groupId>
         <artifactId>tools.vitruv.dsls.reactions.runtime</artifactId>
-        <version>${vitruv.version}</version>
+        <version>${vitruv.dsls.version}</version>
       </dependency>
       <dependency>
         <groupId>tools.vitruv</groupId>
         <artifactId>tools.vitruv.framework.views</artifactId>
-        <version>${vitruv.version}</version>
+        <version>${vitruv.framework.version}</version>
       </dependency>
       <dependency>
         <groupId>tools.vitruv</groupId>
         <artifactId>tools.vitruv.framework.vsum</artifactId>
-        <version>${vitruv.version}</version>
+        <version>${vitruv.framework.version}</version>
       </dependency>
       <dependency>
         <groupId>tools.vitruv</groupId>
         <artifactId>tools.vitruv.server.remote</artifactId>
-        <version>${vitruv.version}</version>
+        <version>${vitruv.server.version}</version>
       </dependency>
       <!-- VitruvOCL is versioned independently from the Vitruvius core -->
       <dependency>

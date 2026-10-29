@@ -97,7 +97,10 @@ public class ProjectGenerator {
     model.put("generatedSources", ProjectLayout.GENERATED_ECORE_SOURCES);
 
     model.put("parentVersion", properties.getParentVersion());
-    model.put("vitruvVersion", properties.getVitruvVersion());
+    model.put("vitruvChangeVersion", properties.getVitruvChangeVersion());
+    model.put("vitruvFrameworkVersion", properties.getVitruvFrameworkVersion());
+    model.put("vitruvDslsVersion", properties.getVitruvDslsVersion());
+    model.put("vitruvServerVersion", properties.getVitruvServerVersion());
     model.put("vitruvoclVersion", properties.getVitruvoclVersion());
     model.put("emfCommonVersion", properties.getEmfCommonVersion());
     model.put("emfEcoreVersion", properties.getEmfEcoreVersion());
