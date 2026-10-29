@@ -105,6 +105,66 @@ class ReactionsProcessorTest {
   }
 
   @Test
+  void movesJavaImportsInFrontOfTheMetamodelImports() throws IOException {
+    UploadedFile reactions =
+        text(
+            "reaction-1.reactions",
+            """
+            import "http://vitruv.tools/methodologisttemplate/model" as model
+            import "http://vitruv.tools/methodologisttemplate/model2" as model2
+            // helpers
+            import java.io.File
+            import static java.util.Objects.requireNonNull;
+            import java.util.*
+
+            reactions: modelToModel2
+            in reaction to changes in model
+            execute actions in model2
+            // import java.ignored.InTheBody
+            """);
+
+    processor.process(List.of(reactions), METAMODELS, projectRoot);
+
+    assertEquals(
+        """
+        import java.io.File
+        import static java.util.Objects.requireNonNull;
+        import java.util.*
+        import "http://vitruv.tools/methodologisttemplate/model" as model
+        import "http://vitruv.tools/methodologisttemplate/model2" as model2
+        // helpers
+
+        reactions: modelToModel2
+        in reaction to changes in model
+        execute actions in model2
+        // import java.ignored.InTheBody
+        """,
+        Files.readString(
+            ProjectLayout.reactionsDirectory(projectRoot).resolve("reaction-1.reactions")));
+  }
+
+  @Test
+  void leavesCorrectlyOrderedAndCommentedOutImportsAlone() {
+    String ordered =
+        """
+        import java.io.File
+        import "http://vitruv.tools/methodologisttemplate/model" as model
+        reactions: model
+        """;
+    String commentedOut =
+        """
+        import "http://vitruv.tools/methodologisttemplate/model" as model
+        /*
+        import java.io.File
+        */
+        reactions: model
+        """;
+
+    assertEquals(ordered, ReactionsProcessor.hoistJavaImports(ordered));
+    assertEquals(commentedOut, ReactionsProcessor.hoistJavaImports(commentedOut));
+  }
+
+  @Test
   void rejectsImportsOfMetamodelsThatWereNotUploadedAndSuggestsTheRightOne() {
     UploadedFile reactions =
         text(

@@ -1,6 +1,7 @@
 package tools.vitruv.methodologist.setup.vsum.service.reactions;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -32,6 +33,13 @@ public class ReactionsProcessor {
   private static final Pattern IMPORT = Pattern.compile("\\bimport\\s+\"([^\"]+)\"");
   private static final Pattern SEGMENT =
       Pattern.compile("\\breactions\\s*:\\s*\\^?([A-Za-z_][A-Za-z0-9_]*)");
+  // Xbase import: import [static [extension]] qualified.Name[.*][;]
+  private static final Pattern JAVA_IMPORT =
+      Pattern.compile(
+          "\\s*import\\s+(?:static\\s+(?:extension\\s+)?)?\\^?[A-Za-z_$][\\w$]*"
+              + "(?:\\s*\\.\\s*\\^?[A-Za-z_$][\\w$]*)*(?:\\s*\\.\\s*\\*)?\\s*;?\\s*(?://.*)?");
+  private static final Pattern METAMODEL_IMPORT_START = Pattern.compile("\\s*import\\s+\"");
+  private static final Pattern SEGMENT_START = Pattern.compile("\\s*reactions\\s*:");
 
   /**
    * Validates the reactions files, copies them into the consistency module, and returns the fully
@@ -103,9 +111,58 @@ public class ReactionsProcessor {
     Path directory = ProjectLayout.reactionsDirectory(projectRoot);
     Files.createDirectories(directory);
     for (UploadedFile file : reactions) {
-      Files.write(directory.resolve(file.fileName()), file.content());
+      String text = file.text();
+      String normalized = hoistJavaImports(text);
+      if (normalized.equals(text)) {
+        Files.write(directory.resolve(file.fileName()), file.content());
+      } else {
+        Files.writeString(directory.resolve(file.fileName()), normalized, StandardCharsets.UTF_8);
+      }
     }
     return specifications;
+  }
+
+  /**
+   * Moves Java imports ({@code import java.io.File}) in front of the metamodel imports ({@code
+   * import "nsUri" as alias}). The Reactions grammar only accepts them in that order, but the
+   * editors start a file with the metamodel imports, so Java imports are usually added below them.
+   * Files in the right order are returned unchanged.
+   *
+   * @param source reactions source text
+   * @return the source with all Java imports of the header placed first
+   */
+  static String hoistJavaImports(String source) {
+    String[] lines = source.split("\n", -1);
+    List<String> javaImports = new ArrayList<>();
+    List<String> rest = new ArrayList<>();
+    boolean metamodelImportSeen = false;
+    boolean misplaced = false;
+    boolean inBlockComment = false;
+    int index = 0;
+    for (; index < lines.length; index++) {
+      String line = lines[index];
+      if (inBlockComment) {
+        inBlockComment = !line.contains("*/");
+      } else if (SEGMENT_START.matcher(line).lookingAt()) {
+        break;
+      } else if (JAVA_IMPORT.matcher(line).matches()) {
+        javaImports.add(line);
+        misplaced |= metamodelImportSeen;
+        continue;
+      } else if (METAMODEL_IMPORT_START.matcher(line).lookingAt()) {
+        metamodelImportSeen = true;
+      } else if (line.contains("/*") && !line.contains("*/")) {
+        inBlockComment = true;
+      }
+      rest.add(line);
+    }
+    if (!misplaced) {
+      return source;
+    }
+    List<String> result = new ArrayList<>(javaImports);
+    result.addAll(rest);
+    result.addAll(List.of(lines).subList(index, lines.length));
+    return String.join("\n", result);
   }
 
   /**
