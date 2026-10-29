@@ -12,8 +12,24 @@ public final class VsumErrorCodes {
   /** An uploaded reactions file does not fit the uploaded metamodels. */
   public static final String REACTIONS_ERROR = "VSUM_REACTIONS_ERROR";
 
-  /** The generated project was rejected by the Maven build (compilation or smoke test failed). */
+  /**
+   * The Maven build rejected the uploaded files: the metamodels, reactions, or constraints do not
+   * compile, or the smoke test failed.
+   */
   public static final String BUILD_FAILED = "VSUM_BUILD_FAILED";
+
+  /**
+   * The build could not run because of the build environment, e.g. a dependency could not be
+   * resolved or the disk is full. Not caused by the uploaded files; retrying later may succeed.
+   */
+  public static final String BUILD_UNAVAILABLE = "VSUM_BUILD_UNAVAILABLE";
+
+  /**
+   * Code or build files that the service generates independently of the uploaded files do not
+   * build, or the configured library versions are incompatible. A problem of the setup service or
+   * its configuration.
+   */
+  public static final String INTERNAL_ERROR = "VSUM_INTERNAL_ERROR";
 
   /** The Maven build did not finish within the configured timeout. */
   public static final String BUILD_TIMEOUT = "VSUM_BUILD_TIMEOUT";

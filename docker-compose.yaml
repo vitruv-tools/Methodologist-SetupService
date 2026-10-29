@@ -11,10 +11,7 @@ services:
         -XX:+UseContainerSupport
         -XX:MaxRAMPercentage=75.0
         -XX:InitialRAMPercentage=25.0
-    volumes:
-      # Keeps the Maven repository of the VSUM builds across container rebuilds
-      - maven-repo:/root/.m2
+    # The Maven repository of the VSUM builds is part of the image (/opt/vsum-m2). Do not mount a
+    # volume over it: a named volume is filled from the image only once and would then hide the
+    # dependencies of newer images.
     restart: unless-stopped
-
-volumes:
-  maven-repo:

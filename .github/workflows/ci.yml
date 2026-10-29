@@ -49,6 +49,59 @@ jobs:
           name: build-results-ubuntu-latest
           path: staging-ubuntu-latest
 
+  integration:
+    name: Build generated VSUM projects with Maven
+    runs-on: ubuntu-latest
+    needs: [verify]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5.0.0
+
+      # the same Java version as the Docker image
+      - name: Setup Java and Maven cache
+        uses: actions/setup-java@v4.7.1
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+
+      - name: Verify with real VSUM builds
+        run: >
+          ./mvnw verify
+          -Dvsum.integration=true
+          --batch-mode
+          --no-transfer-progress
+
+  docker:
+    name: Build Docker image and check offline VSUM builds
+    runs-on: ubuntu-latest
+    needs: [verify]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5.0.0
+
+      # also fills the image's Maven repository by building the sample VSUM project
+      - name: Build image
+        run: docker build --tag methodologist-setup-service:ci .
+
+      # Without online fallback, the startup warm-up only succeeds if the image's Maven repository
+      # contains every dependency; readiness stays OUT_OF_SERVICE otherwise.
+      - name: Check that the container builds VSUMs offline
+        run: |
+          docker run --detach --name setup-service --publish 8090:8090 \
+            --env SETUP_VSUM_ONLINE_FALLBACK=false methodologist-setup-service:ci
+          for attempt in $(seq 1 60); do
+            status=$(curl --silent http://localhost:8090/actuator/health/readiness \
+              | jq --raw-output '.status' 2>/dev/null || true)
+            echo "readiness: ${status:-not reachable}"
+            if [ "$status" = "UP" ]; then exit 0; fi
+            sleep 5
+          done
+          docker logs setup-service
+          exit 1
+
   sonar:
     name: SonarQube analysis
     runs-on: ubuntu-latest

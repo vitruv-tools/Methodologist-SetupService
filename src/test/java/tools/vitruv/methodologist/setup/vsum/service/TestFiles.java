@@ -5,7 +5,10 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 
-/** Loads the VSUM test fixtures from {@code src/test/resources/vsum}. */
+/**
+ * Loads the VSUM test fixtures from {@code src/test/resources/vsum} and the sample project of the
+ * warm-up build from {@code src/main/resources/vsum-sample}.
+ */
 public final class TestFiles {
 
   private TestFiles() {}
@@ -17,14 +20,16 @@ public final class TestFiles {
    * @return the uploaded file
    */
   public static UploadedFile fixture(String name) {
-    try (InputStream input = TestFiles.class.getResourceAsStream("/vsum/" + name)) {
-      if (input == null) {
-        throw new IllegalArgumentException("Unknown fixture " + name);
+    for (String directory : new String[] {"/vsum/", "/vsum-sample/"}) {
+      try (InputStream input = TestFiles.class.getResourceAsStream(directory + name)) {
+        if (input != null) {
+          return new UploadedFile(name, input.readAllBytes());
+        }
+      } catch (IOException e) {
+        throw new UncheckedIOException(e);
       }
-      return new UploadedFile(name, input.readAllBytes());
-    } catch (IOException e) {
-      throw new UncheckedIOException(e);
     }
+    throw new IllegalArgumentException("Unknown fixture " + name);
   }
 
   /**

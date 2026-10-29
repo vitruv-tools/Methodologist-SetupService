@@ -36,6 +36,9 @@ import tools.vitruv.methodologist.setup.vsum.service.views.ViewDefinitionProcess
 @RequiredArgsConstructor
 public class VsumProjectBuildService {
 
+  /** Prefix of the temporary build workspaces. */
+  static final String WORKSPACE_PREFIX = "vsum-build-";
+
   private final MetamodelProcessor metamodelProcessor;
   private final ReactionsProcessor reactionsProcessor;
   private final ConstraintsProcessor constraintsProcessor;
@@ -66,28 +69,39 @@ public class VsumProjectBuildService {
 
   private byte[] build(VsumBuildRequest request, ArtifactExtractor extractor) {
     Path workspace = null;
-    boolean succeeded = false;
+    boolean keepWorkspace = false;
     try {
-      workspace = Files.createTempDirectory("vsum-build-");
+      workspace = Files.createTempDirectory(WORKSPACE_PREFIX);
       Path projectRoot = workspace.resolve("project");
       generateProject(request, projectRoot);
       mavenBuildRunner.build(projectRoot, workspace);
-      byte[] artifact = extractor.extract(projectRoot);
-      succeeded = true;
-      return artifact;
+      return extractor.extract(projectRoot);
+    } catch (MethodologistSetupException e) {
+      keepWorkspace = properties.isKeepFailedWorkspaces() || isNotCausedByTheUploads(e);
+      throw e;
     } catch (IOException e) {
+      keepWorkspace = properties.isKeepFailedWorkspaces();
       throw new MethodologistSetupException(
           VsumErrorCodes.BUILD_ERROR,
           "Failed to build the VSUM project: " + e.getMessage(),
           HttpStatus.INTERNAL_SERVER_ERROR,
           e);
     } finally {
-      if (!succeeded && properties.isKeepFailedWorkspaces() && workspace != null) {
+      if (keepWorkspace && workspace != null) {
         log.warn("Keeping workspace of failed VSUM build: {}", workspace);
       } else {
         deleteRecursively(workspace);
       }
     }
+  }
+
+  /**
+   * Failures of the build environment or the service itself are kept for debugging; they are
+   * deleted on a later startup (see {@link VsumWorkspaceCleaner}).
+   */
+  private static boolean isNotCausedByTheUploads(MethodologistSetupException e) {
+    return VsumErrorCodes.INTERNAL_ERROR.equals(e.getErrorCode())
+        || VsumErrorCodes.BUILD_UNAVAILABLE.equals(e.getErrorCode());
   }
 
   /**
