@@ -76,8 +76,10 @@ class VsumProjectBuildServiceTest {
             "model/src/main/ecore/model.genmodel",
             "model/src/main/ecore/model2.genmodel",
             "consistency/pom.xml",
-            "consistency/src/main/reactions/tools/vitruv/methodologisttemplate/consistency/templateReactions.reactions",
-            "consistency/src/main/constraints/tools/vitruv/methodologisttemplate/consistency/constraints.ocl",
+            "consistency/src/main/reactions/tools/vitruv/methodologisttemplate/consistency/"
+                + "templateReactions.reactions",
+            "consistency/src/main/constraints/tools/vitruv/methodologisttemplate/consistency/"
+                + "constraints.ocl",
             "views/src/main/neojoin/components.nj",
             "vsum/pom.xml",
             "vsum/src/main/java/tools/vitruv/methodologisttemplate/vsum/VSUMExample.java",
@@ -93,7 +95,8 @@ class VsumProjectBuildServiceTest {
     String workflow = Files.readString(projectRoot.resolve("model/workflow/generate.mwe2"));
     assertTrue(
         workflow.contains(
-            "platform:/resource/tools.vitruv.methodologisttemplate.model/src/main/ecore/model2.genmodel"),
+            "platform:/resource/tools.vitruv.methodologisttemplate.model/src/main/ecore/"
+                + "model2.genmodel"),
         workflow);
 
     String main =
@@ -185,8 +188,6 @@ class VsumProjectBuildServiceTest {
         fixture("templateReactions.reactions")
             .text()
             .replace("val entity = new model2::Entity", "val entity = new model2::Entitiy");
-    int typoLine = lineContaining(reactions, "model2::Entitiy");
-
     VsumBuildException exception =
         assertThrows(
             VsumBuildException.class,
@@ -203,7 +204,8 @@ class VsumProjectBuildServiceTest {
     BuildProblem problem = exception.getProblems().get(0);
     assertEquals(Source.REACTIONS, problem.source());
     assertEquals("my.reactions", problem.file());
-    assertEquals(typoLine, problem.line(), exception.getMessage());
+    assertEquals(
+        lineContaining(reactions, "model2::Entitiy"), problem.line(), exception.getMessage());
     assertTrue(problem.message().contains("Entitiy"), problem.message());
     assertTrue(problem.excerpt().contains("new model2::Entitiy"), problem.excerpt());
   }
@@ -251,8 +253,6 @@ class VsumProjectBuildServiceTest {
         fixture("constraints.ocl")
             .text()
             .replace("self.entities.size() >= 2", "self.entitiez.size() >= 2");
-    int constraintLine = lineContaining(constraints, "inv LinkHasAtLeastTwoEntities");
-
     VsumBuildException exception =
         assertThrows(
             VsumBuildException.class,
@@ -268,7 +268,10 @@ class VsumProjectBuildServiceTest {
     BuildProblem problem = exception.getProblems().get(0);
     assertEquals(Source.CONSTRAINTS, problem.source(), exception.getMessage());
     assertEquals("rules.ocl", problem.file());
-    assertEquals(constraintLine, problem.line(), exception.getMessage());
+    assertEquals(
+        lineContaining(constraints, "inv LinkHasAtLeastTwoEntities"),
+        problem.line(),
+        exception.getMessage());
     assertTrue(problem.message().contains("LinkHasAtLeastTwoEntities"), problem.message());
   }
 

@@ -92,7 +92,7 @@ class ReactionsProcessorTest {
             execute actions in source
             "reactions: FakeString"
             'reactions: FakeSingleQuotedString // not a comment'
-            \u0027\u0027\u0027reactions: FakeRichString\u0027\u0027\u0027
+            '''reactions: FakeRichString'''
             reactions: ^brake2CAD
             in reaction to changes in source
             execute actions in source

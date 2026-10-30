@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Renders problems as readable text, grouped by file in the order of their first problem:
+ * Renders problems as readable text, grouped by file in the order of their first problem.
  *
  * <pre>
  * The VSUM build failed:

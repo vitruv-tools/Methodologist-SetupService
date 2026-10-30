@@ -136,7 +136,8 @@ class MetamodelProcessorTest {
                 .text()
                 .replace(
                     "name=\"Protocol\">",
-                    "name=\"Protocol\" abstract=\"true\" interface=\"true\" eSuperTypes=\"#//Protocol\">"));
+                    "name=\"Protocol\" abstract=\"true\" interface=\"true\""
+                        + " eSuperTypes=\"#//Protocol\">"));
 
     MethodologistSetupException exception =
         assertThrows(

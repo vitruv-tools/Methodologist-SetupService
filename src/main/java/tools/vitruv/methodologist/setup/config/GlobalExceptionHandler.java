@@ -140,6 +140,9 @@ public class GlobalExceptionHandler {
       String message,
       List<BuildProblem> problems)
       throws IOException {
+    response.setStatus(status.value());
+    response.setCharacterEncoding("UTF-8");
+    response.setContentType("application/json");
     ErrorResponseDTO errorResponse =
         ErrorResponseDTO.builder()
             .errorCode(errorCode)
@@ -149,10 +152,6 @@ public class GlobalExceptionHandler {
             .path(request.getRequestURI())
             .problems(problems)
             .build();
-
-    response.setStatus(status.value());
-    response.setCharacterEncoding("UTF-8");
-    response.setContentType("application/json");
     response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
   }
 }

@@ -52,10 +52,6 @@ public class ProjectGenerator {
         createModel(metamodels, changePropagationSpecifications, constraintResources);
 
     Path modelModule = ProjectLayout.modelModule(projectRoot);
-    Path consistencyModule = ProjectLayout.consistencyModule(projectRoot);
-    Path vsumModule = ProjectLayout.vsumModule(projectRoot);
-    String vsumSources = ProjectLayout.VSUM_PACKAGE.replace('.', '/') + "/";
-
     render("rootPom.ftl", model, projectRoot.resolve("pom.xml"));
     render("modelPom.ftl", model, modelModule.resolve("pom.xml"));
     render("modelProject.ftl", model, modelModule.resolve(".project"));
@@ -63,7 +59,13 @@ public class ProjectGenerator {
     render("modelPluginProperties.ftl", model, modelModule.resolve("plugin.properties"));
     render("modelPluginXml.ftl", model, modelModule.resolve("plugin.xml"));
     render("modelWorkflow.ftl", model, modelModule.resolve("workflow/generate.mwe2"));
-    render("consistencyPom.ftl", model, consistencyModule.resolve("pom.xml"));
+    render(
+        "consistencyPom.ftl",
+        model,
+        ProjectLayout.consistencyModule(projectRoot).resolve("pom.xml"));
+
+    Path vsumModule = ProjectLayout.vsumModule(projectRoot);
+    String vsumSources = ProjectLayout.VSUM_PACKAGE.replace('.', '/') + "/";
     render("vsumPom.ftl", model, vsumModule.resolve("pom.xml"));
     render(
         "vsumMain.ftl",

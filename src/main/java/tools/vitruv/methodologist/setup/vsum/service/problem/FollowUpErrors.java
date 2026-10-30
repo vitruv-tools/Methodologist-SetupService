@@ -11,7 +11,7 @@ import tools.vitruv.methodologist.setup.vsum.service.problem.BuildProblem.Source
 
 /**
  * Hides errors of the Reactions compiler that only follow from another error in the same file, so
- * that the root cause is not buried:
+ * that the root cause is not buried.
  *
  * <ul>
  *   <li>A syntax error makes the parser lose track, and most later errors of the file are caused by

@@ -71,7 +71,8 @@ class BuildOutputParserTest {
                     + file2
                     + " line : 3 column : 8)",
                 "[ERROR] ERROR:File cannot be resolved. (" + file2 + " line : 23 column : 48)",
-                "[ERROR] Failed to execute goal org.eclipse.xtext:xtext-maven-plugin:2.43.0:generate"
+                "[ERROR] Failed to execute goal"
+                    + " org.eclipse.xtext:xtext-maven-plugin:2.43.0:generate"
                     + " (default) on project tools.vitruv.methodologisttemplate.consistency:"
                     + " Execution failed due to a severe validation error. -> [Help 1]"),
             sources);

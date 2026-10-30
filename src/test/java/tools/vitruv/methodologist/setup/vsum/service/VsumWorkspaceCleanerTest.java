@@ -28,7 +28,7 @@ class VsumWorkspaceCleanerTest {
         Files.createDirectories(oldBuild.resolve("project/vsum")).resolve("pom.xml"), "<p/>");
     Files.setLastModifiedTime(oldBuild, FileTime.from(NOW.minus(Duration.ofDays(2))));
     Path oldProject = workspace("vsum-project-2", NOW.minus(Duration.ofDays(2)));
-    Path recentBuild = workspace("vsum-build-3", NOW.minus(Duration.ofMinutes(5)));
+    final Path recentBuild = workspace("vsum-build-3", NOW.minus(Duration.ofMinutes(5)));
 
     int deleted = cleaner.deleteWorkspaces(tmp, NOW.minus(Duration.ofDays(1)));
 
