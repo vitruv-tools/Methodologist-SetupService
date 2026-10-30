@@ -14,10 +14,13 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.springframework.stereotype.Service;
-import tools.vitruv.methodologist.setup.exception.MethodologistSetupException;
 import tools.vitruv.methodologist.setup.vsum.service.UploadedFile;
 import tools.vitruv.methodologist.setup.vsum.service.VsumErrorCodes;
 import tools.vitruv.methodologist.setup.vsum.service.metamodel.GeneratedMetamodel;
+import tools.vitruv.methodologist.setup.vsum.service.problem.BuildProblem;
+import tools.vitruv.methodologist.setup.vsum.service.problem.BuildProblem.Source;
+import tools.vitruv.methodologist.setup.vsum.service.problem.Excerpts;
+import tools.vitruv.methodologist.setup.vsum.service.problem.VsumBuildException;
 import tools.vitruv.methodologist.setup.vsum.service.project.ProjectLayout;
 
 /**
@@ -49,8 +52,8 @@ public class ReactionsProcessor {
    * @param metamodels the processed metamodels the reactions may import
    * @param projectRoot root of the generated project
    * @return generated change propagation specification class names, one per reactions segment
-   * @throws MethodologistSetupException when a file declares no segment, a segment is declared
-   *     twice, or a file imports a metamodel that was not uploaded
+   * @throws VsumBuildException when a file declares no segment, a segment is declared twice, or a
+   *     file imports a metamodel that was not uploaded
    * @throws IOException when writing the files fails
    */
   public List<String> process(
@@ -62,50 +65,60 @@ public class ReactionsProcessor {
     metamodels.forEach(metamodel -> knownNsUris.add(metamodel.nsUri()));
     knownNsUris.add(EcorePackage.eNS_URI);
 
-    List<String> errors = new ArrayList<>();
+    List<BuildProblem> problems = new ArrayList<>();
     Map<String, String> segmentOwners = new HashMap<>();
     List<String> specifications = new ArrayList<>();
 
     for (UploadedFile file : reactions) {
-      String source = stripComments(file.text());
+      String text = file.text();
+      String source = stripComments(text);
 
       Matcher imports = IMPORT.matcher(source);
       while (imports.find()) {
         String nsUri = imports.group(1);
         if (!knownNsUris.contains(nsUri)) {
-          errors.add(
-              String.format(
-                  "%s: imports '%s', which is not the nsURI of an uploaded metamodel%s",
-                  file.fileName(), nsUri, suggestion(nsUri, metamodels)));
+          problems.add(
+              problem(
+                      file,
+                      imports.start(1) - 1,
+                      String.format(
+                          "imports '%s', which is not the nsURI of an uploaded metamodel", nsUri))
+                  .withHint(suggestion(nsUri, metamodels, knownNsUris)));
         }
       }
 
-      List<String> segments = new ArrayList<>();
-      Matcher segmentMatcher = SEGMENT.matcher(STRINGS.matcher(source).replaceAll(" "));
-      while (segmentMatcher.find()) {
-        segments.add(segmentMatcher.group(1));
-      }
+      List<Segment> segments = segments(source);
       if (segments.isEmpty()) {
-        errors.add(file.fileName() + ": declares no 'reactions: <name>' segment");
+        problems.add(
+            BuildProblem.of(Source.REACTIONS, file.fileName(), "declares no reactions segment")
+                .withHint(
+                    "Start the reactions with a segment declaration like 'reactions: AToB',"
+                        + " followed by 'in reaction to changes in a' and 'execute actions in b'"));
       }
-      for (String segment : segments) {
-        String owner = segmentOwners.putIfAbsent(segment.toLowerCase(), file.fileName());
+      for (Segment segment : segments) {
+        String owner = segmentOwners.putIfAbsent(segment.name().toLowerCase(), file.fileName());
         if (owner != null) {
-          errors.add(
-              String.format(
-                  "%s: the reactions segment '%s' is already declared in %s",
-                  file.fileName(), segment, owner));
+          problems.add(
+              problem(
+                      file,
+                      segment.offset(),
+                      String.format(
+                          "the reactions segment '%s' is already declared in %s",
+                          segment.name(), owner))
+                  .withHint(
+                      "Segment names must be unique across all reactions files, ignoring case;"
+                          + " rename one of them"));
         } else {
-          specifications.add(changePropagationSpecification(segment));
+          specifications.add(changePropagationSpecification(segment.name()));
         }
       }
     }
 
-    if (!errors.isEmpty()) {
-      throw new MethodologistSetupException(
+    if (!problems.isEmpty()) {
+      throw new VsumBuildException(
           VsumErrorCodes.REACTIONS_ERROR,
-          "The uploaded reactions do not match the uploaded metamodels:\n- "
-              + String.join("\n- ", errors));
+          "The uploaded reactions do not match the uploaded metamodels:",
+          problems);
     }
 
     Path directory = ProjectLayout.reactionsDirectory(projectRoot);
@@ -132,9 +145,24 @@ public class ReactionsProcessor {
    * @return the source with all Java imports of the header placed first
    */
   static String hoistJavaImports(String source) {
+    return hoist(source).text();
+  }
+
+  /**
+   * Maps the lines of the file as written into the project back to the lines of the upload, which
+   * differ if Java imports were moved (see {@link #hoistJavaImports(String)}).
+   *
+   * @param source reactions source text as uploaded
+   * @return for each 0-based line of the written file, the 1-based line of the upload
+   */
+  public static int[] uploadedLines(String source) {
+    return hoist(source).uploadedLines();
+  }
+
+  private static Hoisted hoist(String source) {
     String[] lines = source.split("\n", -1);
-    List<String> javaImports = new ArrayList<>();
-    List<String> rest = new ArrayList<>();
+    List<Integer> javaImports = new ArrayList<>();
+    List<Integer> rest = new ArrayList<>();
     boolean metamodelImportSeen = false;
     boolean misplaced = false;
     boolean inBlockComment = false;
@@ -146,7 +174,7 @@ public class ReactionsProcessor {
       } else if (SEGMENT_START.matcher(line).lookingAt()) {
         break;
       } else if (JAVA_IMPORT.matcher(line).matches()) {
-        javaImports.add(line);
+        javaImports.add(index);
         misplaced |= metamodelImportSeen;
         continue;
       } else if (METAMODEL_IMPORT_START.matcher(line).lookingAt()) {
@@ -154,15 +182,72 @@ public class ReactionsProcessor {
       } else if (line.contains("/*") && !line.contains("*/")) {
         inBlockComment = true;
       }
-      rest.add(line);
+      rest.add(index);
     }
-    if (!misplaced) {
-      return source;
+    List<Integer> order = new ArrayList<>();
+    if (misplaced) {
+      order.addAll(javaImports);
+      order.addAll(rest);
+    } else {
+      for (int i = 0; i < index; i++) {
+        order.add(i);
+      }
     }
-    List<String> result = new ArrayList<>(javaImports);
-    result.addAll(rest);
-    result.addAll(List.of(lines).subList(index, lines.length));
-    return String.join("\n", result);
+    for (int i = index; i < lines.length; i++) {
+      order.add(i);
+    }
+    String text =
+        misplaced ? String.join("\n", order.stream().map(i -> lines[i]).toList()) : source;
+    return new Hoisted(text, order.stream().mapToInt(i -> i + 1).toArray());
+  }
+
+  private record Hoisted(String text, int[] uploadedLines) {}
+
+  /**
+   * Finds the reactions segments declared in a source without comments (see {@link
+   * #stripComments(String)}); declarations inside string literals are ignored.
+   *
+   * @param source reactions source text without comments
+   * @return the segments with the offset of their declaration
+   */
+  public static List<Segment> segments(String source) {
+    List<Segment> segments = new ArrayList<>();
+    Matcher matcher = SEGMENT.matcher(blankStrings(source));
+    while (matcher.find()) {
+      segments.add(new Segment(matcher.group(1), matcher.start()));
+    }
+    return segments;
+  }
+
+  /**
+   * A declared reactions segment.
+   *
+   * @param name the segment name, without a leading {@code ^}
+   * @param offset character offset of the {@code reactions} keyword
+   */
+  public record Segment(String name, int offset) {}
+
+  /** Replaces string literals by spaces of the same length, keeping offsets and line breaks. */
+  private static String blankStrings(String source) {
+    Matcher matcher = STRINGS.matcher(source);
+    StringBuilder result = new StringBuilder();
+    while (matcher.find()) {
+      matcher.appendReplacement(
+          result, Matcher.quoteReplacement(matcher.group().replaceAll("[^\n]", " ")));
+    }
+    matcher.appendTail(result);
+    return result.toString();
+  }
+
+  private static BuildProblem problem(UploadedFile file, int offset, String message) {
+    String text = file.text();
+    return BuildProblem.at(
+        Source.REACTIONS,
+        file.fileName(),
+        text,
+        Excerpts.lineOf(text, offset),
+        Excerpts.columnOf(text, offset),
+        message);
   }
 
   /**
@@ -179,12 +264,13 @@ public class ReactionsProcessor {
 
   /**
    * Removes {@code //} and {@code /* *}{@code /} comments while leaving string literals (such as
-   * {@code "http://..."} imports) untouched.
+   * {@code "http://..."} imports) untouched. Comments are replaced by spaces of the same length
+   * with their line breaks kept, so offsets and lines stay those of the source.
    *
    * @param source reactions source text
    * @return the source with comments replaced by spaces
    */
-  static String stripComments(String source) {
+  public static String stripComments(String source) {
     StringBuilder result = new StringBuilder(source.length());
     int index = 0;
     while (index < source.length()) {
@@ -195,12 +281,14 @@ public class ReactionsProcessor {
         index = literalEnd;
       } else if (source.startsWith("//", index)) {
         int end = source.indexOf('\n', index);
-        index = end < 0 ? source.length() : end;
-        result.append(' ');
+        end = end < 0 ? source.length() : end;
+        result.append(blank(source.substring(index, end)));
+        index = end;
       } else if (source.startsWith("/*", index)) {
         int end = source.indexOf("*/", index + 2);
-        index = end < 0 ? source.length() : end + 2;
-        result.append(' ');
+        end = end < 0 ? source.length() : end + 2;
+        result.append(blank(source.substring(index, end)));
+        index = end;
       } else {
         result.append(current);
         index++;
@@ -213,6 +301,10 @@ public class ReactionsProcessor {
    * Returns the end of the string literal starting at {@code index}, or {@code index} if none
    * starts there. Recognizes Xtend rich strings and single- or double-quoted strings.
    */
+  private static String blank(String text) {
+    return text.replaceAll("[^\n]", " ");
+  }
+
   private static int literalEnd(String source, int index) {
     if (source.startsWith("'''", index)) {
       int end = source.indexOf("'''", index + 3);
@@ -229,7 +321,8 @@ public class ReactionsProcessor {
     return Math.min(end + 1, source.length());
   }
 
-  private String suggestion(String nsUri, List<GeneratedMetamodel> metamodels) {
+  private String suggestion(
+      String nsUri, List<GeneratedMetamodel> metamodels, Set<String> knownNsUris) {
     String lastSegment = lastSegment(nsUri);
     return metamodels.stream()
         .filter(
@@ -237,8 +330,14 @@ public class ReactionsProcessor {
                 metamodel.name().equalsIgnoreCase(lastSegment)
                     || lastSegment(metamodel.nsUri()).equalsIgnoreCase(lastSegment))
         .findFirst()
-        .map(metamodel -> " (did you mean '" + metamodel.nsUri() + "'?)")
-        .orElse("");
+        .map(metamodel -> "Did you mean '" + metamodel.nsUri() + "'?")
+        .orElse(
+            "Import a metamodel by its nsURI; the uploaded metamodels have: "
+                + String.join(
+                    ", ",
+                    knownNsUris.stream()
+                        .filter(uri -> !uri.equals(EcorePackage.eNS_URI))
+                        .toList()));
   }
 
   private static String lastSegment(String uri) {

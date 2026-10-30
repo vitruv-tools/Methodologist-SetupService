@@ -138,6 +138,35 @@ uploads are reported as such:
 | `500`  | `VSUM_INTERNAL_ERROR`    | Code the service generates itself does not build, or the library versions are incompatible |
 | `504`  | `VSUM_BUILD_TIMEOUT`     | The build exceeded `setup.vsum.build-timeout`; the message names the module being built   |
 
+Errors of the uploads are attributed to the file that causes them, with the line of the upload,
+an excerpt, and a hint where one is known. They are listed in `problems`, root causes first; `message`
+contains the same as readable text:
+
+```json
+{
+  "errorCode": "VSUM_BUILD_FAILED",
+  "status": 422,
+  "message": "The VSUM build failed:\n\nmy.reactions:\n- line 51, column 30: 'Entitiy' cannot be resolved\n...",
+  "problems": [
+    {
+      "source": "REACTIONS",
+      "file": "my.reactions",
+      "line": 51,
+      "column": 30,
+      "message": "'Entitiy' cannot be resolved",
+      "excerpt": "    val entity = new model2::Entitiy\n                             ^"
+    }
+  ]
+}
+```
+
+`source` is `METAMODEL`, `REACTIONS`, `CONSTRAINTS`, `VIEWS`, `INFRASTRUCTURE`, or `INTERNAL`; `file`,
+`line`, `column`, `excerpt`, `hint`, and `hiddenFollowUpErrors` are omitted when unknown. Errors that only
+follow from another one, e.g. everything after a syntax error in the same reactions file, are not listed
+but counted in `hiddenFollowUpErrors`. Problems are reported for metamodels and reactions rejected before
+the build, for Reactions compiler and Java compiler errors, and for failures of the smoke test (constraints
+that cannot be evaluated, exceptions in reactions or routines while creating the VSUM).
+
 The workspaces of `503` and `500` builds are kept in the temporary directory for debugging and deleted on a
 later startup once older than `setup.vsum.workspace-retention`.
 

@@ -30,6 +30,9 @@ import tools.vitruv.methodologist.setup.exception.MethodologistSetupException;
 import tools.vitruv.methodologist.setup.vsum.service.build.MavenBuildRunner;
 import tools.vitruv.methodologist.setup.vsum.service.constraints.ConstraintsProcessor;
 import tools.vitruv.methodologist.setup.vsum.service.metamodel.MetamodelProcessor;
+import tools.vitruv.methodologist.setup.vsum.service.problem.BuildProblem;
+import tools.vitruv.methodologist.setup.vsum.service.problem.BuildProblem.Source;
+import tools.vitruv.methodologist.setup.vsum.service.problem.VsumBuildException;
 import tools.vitruv.methodologist.setup.vsum.service.project.ProjectGenerator;
 import tools.vitruv.methodologist.setup.vsum.service.project.ProjectLayout;
 import tools.vitruv.methodologist.setup.vsum.service.reactions.ReactionsProcessor;
@@ -169,6 +172,114 @@ class VsumProjectBuildServiceTest {
             projectRoot.resolve(
                 "vsum/src/main/java/tools/vitruv/methodologisttemplate/vsum/VSUMExample.java"));
     assertFalse(main.contains("import tools.vitruv.dsls.vitruvocl"), main);
+  }
+
+  /**
+   * A typo in a class name is reported at its line in the upload, as one problem. Runs the real
+   * Maven build.
+   */
+  @Test
+  @EnabledIfSystemProperty(named = "vsum.integration", matches = "true")
+  void reportsReactionsErrorsAtTheirLineInTheUpload() {
+    String reactions =
+        fixture("templateReactions.reactions")
+            .text()
+            .replace("val entity = new model2::Entity", "val entity = new model2::Entitiy");
+    int typoLine = lineContaining(reactions, "model2::Entitiy");
+
+    VsumBuildException exception =
+        assertThrows(
+            VsumBuildException.class,
+            () ->
+                service.buildProjectJar(
+                    new VsumBuildRequest(
+                        List.of(fixture("model.ecore"), fixture("model2.ecore")),
+                        List.of(text("my.reactions", reactions)),
+                        List.of(),
+                        List.of())));
+
+    assertEquals(VsumErrorCodes.BUILD_FAILED, exception.getErrorCode());
+    assertFalse(exception.getMessage().contains("vsum-build-"), exception.getMessage());
+    BuildProblem problem = exception.getProblems().get(0);
+    assertEquals(Source.REACTIONS, problem.source());
+    assertEquals("my.reactions", problem.file());
+    assertEquals(typoLine, problem.line(), exception.getMessage());
+    assertTrue(problem.message().contains("Entitiy"), problem.message());
+    assertTrue(problem.excerpt().contains("new model2::Entitiy"), problem.excerpt());
+  }
+
+  /**
+   * A syntax error is reported without the errors that only follow from it. Runs the real Maven
+   * build.
+   */
+  @Test
+  @EnabledIfSystemProperty(named = "vsum.integration", matches = "true")
+  void reportsOnlyTheSyntaxErrorOfAFile() {
+    String reactions =
+        fixture("templateReactions.reactions")
+            .text()
+            .replace("reaction ComponentRenamed {", "reaction ComponentRenamed {{");
+    int brokenLine = lineContaining(reactions, "reaction ComponentRenamed {{");
+
+    VsumBuildException exception =
+        assertThrows(
+            VsumBuildException.class,
+            () ->
+                service.buildProjectJar(
+                    new VsumBuildRequest(
+                        List.of(fixture("model.ecore"), fixture("model2.ecore")),
+                        List.of(text("my.reactions", reactions)),
+                        List.of(),
+                        List.of())));
+
+    List<BuildProblem> problems = exception.getProblems();
+    assertTrue(
+        problems.stream().allMatch(problem -> "my.reactions".equals(problem.file())),
+        exception.getMessage());
+    assertTrue(
+        problems.stream()
+            .allMatch(problem -> problem.line() != null && problem.line() >= brokenLine),
+        exception.getMessage());
+    assertTrue(problems.size() <= 2, exception.getMessage());
+  }
+
+  /** A constraint that cannot be evaluated is reported at its line. Runs the real Maven build. */
+  @Test
+  @EnabledIfSystemProperty(named = "vsum.integration", matches = "true")
+  void reportsConstraintsThatCannotBeEvaluatedAtTheirLine() {
+    String constraints =
+        fixture("constraints.ocl")
+            .text()
+            .replace("self.entities.size() >= 2", "self.entitiez.size() >= 2");
+    int constraintLine = lineContaining(constraints, "inv LinkHasAtLeastTwoEntities");
+
+    VsumBuildException exception =
+        assertThrows(
+            VsumBuildException.class,
+            () ->
+                service.buildProjectJar(
+                    new VsumBuildRequest(
+                        List.of(fixture("model.ecore"), fixture("model2.ecore")),
+                        List.of(fixture("templateReactions.reactions")),
+                        List.of(text("rules.ocl", constraints)),
+                        List.of())));
+
+    assertEquals(VsumErrorCodes.BUILD_FAILED, exception.getErrorCode());
+    BuildProblem problem = exception.getProblems().get(0);
+    assertEquals(Source.CONSTRAINTS, problem.source(), exception.getMessage());
+    assertEquals("rules.ocl", problem.file());
+    assertEquals(constraintLine, problem.line(), exception.getMessage());
+    assertTrue(problem.message().contains("LinkHasAtLeastTwoEntities"), problem.message());
+  }
+
+  private static int lineContaining(String text, String fragment) {
+    List<String> lines = text.lines().toList();
+    for (int i = 0; i < lines.size(); i++) {
+      if (lines.get(i).contains(fragment)) {
+        return i + 1;
+      }
+    }
+    throw new IllegalArgumentException(fragment);
   }
 
   /**

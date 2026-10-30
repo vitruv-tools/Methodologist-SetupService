@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -23,6 +24,9 @@ import tools.vitruv.methodologist.setup.config.GlobalExceptionHandler;
 import tools.vitruv.methodologist.setup.exception.MethodologistSetupException;
 import tools.vitruv.methodologist.setup.vsum.service.VsumErrorCodes;
 import tools.vitruv.methodologist.setup.vsum.service.VsumProjectBuildService;
+import tools.vitruv.methodologist.setup.vsum.service.problem.BuildProblem;
+import tools.vitruv.methodologist.setup.vsum.service.problem.BuildProblem.Source;
+import tools.vitruv.methodologist.setup.vsum.service.problem.VsumBuildException;
 
 class VsumControllerErrorHandlingTest {
 
@@ -102,6 +106,48 @@ class VsumControllerErrorHandlingTest {
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.errorCode").value(VsumErrorCodes.INPUT_ERROR));
     verifyNoInteractions(buildService);
+  }
+
+  @Test
+  void buildProblemsAreIncludedInTheErrorResponse() throws Exception {
+    when(buildService.buildProjectJar(any()))
+        .thenThrow(
+            new VsumBuildException(
+                VsumErrorCodes.BUILD_FAILED,
+                "The VSUM build failed:",
+                List.of(
+                    BuildProblem.at(
+                            Source.REACTIONS,
+                            "a.reactions",
+                            "import java.io.File\n",
+                            1,
+                            8,
+                            "mismatched input 'java' expecting RULE_STRING")
+                        .withHiddenFollowUpErrors(2)),
+                HttpStatus.UNPROCESSABLE_CONTENT));
+
+    mockMvc
+        .perform(multipart("/api/vsum/jar").file(METAMODEL))
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(jsonPath("$.errorCode").value(VsumErrorCodes.BUILD_FAILED))
+        .andExpect(jsonPath("$.problems[0].source").value("REACTIONS"))
+        .andExpect(jsonPath("$.problems[0].file").value("a.reactions"))
+        .andExpect(jsonPath("$.problems[0].line").value(1))
+        .andExpect(jsonPath("$.problems[0].column").value(8))
+        .andExpect(jsonPath("$.problems[0].excerpt").value("import java.io.File\n       ^"))
+        .andExpect(jsonPath("$.problems[0].hiddenFollowUpErrors").value(2))
+        .andExpect(jsonPath("$.problems[0].hint").doesNotExist())
+        .andExpect(
+            jsonPath("$.message")
+                .value(org.hamcrest.Matchers.containsString("line 1, column 8: mismatched")));
+  }
+
+  @Test
+  void otherErrorsHaveNoProblems() throws Exception {
+    mockMvc
+        .perform(multipart("/api/vsum/jar").file(REACTIONS))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.problems").doesNotExist());
   }
 
   @Test

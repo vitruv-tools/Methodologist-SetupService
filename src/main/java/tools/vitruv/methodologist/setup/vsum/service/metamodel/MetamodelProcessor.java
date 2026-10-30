@@ -20,6 +20,7 @@ import org.eclipse.emf.codegen.ecore.genmodel.GenPackage;
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.emf.ecore.ENamedElement;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EStructuralFeature;
@@ -38,9 +39,12 @@ import org.eclipse.emf.ecore.xmi.impl.EcoreResourceFactoryImpl;
 import org.eclipse.emf.ecore.xmi.impl.XMIResourceFactoryImpl;
 import org.eclipse.emf.ecore.xml.type.XMLTypePackage;
 import org.springframework.stereotype.Service;
-import tools.vitruv.methodologist.setup.exception.MethodologistSetupException;
+import org.xml.sax.SAXParseException;
 import tools.vitruv.methodologist.setup.vsum.service.UploadedFile;
 import tools.vitruv.methodologist.setup.vsum.service.VsumErrorCodes;
+import tools.vitruv.methodologist.setup.vsum.service.problem.BuildProblem;
+import tools.vitruv.methodologist.setup.vsum.service.problem.BuildProblem.Source;
+import tools.vitruv.methodologist.setup.vsum.service.problem.VsumBuildException;
 import tools.vitruv.methodologist.setup.vsum.service.project.ProjectLayout;
 
 /**
@@ -72,8 +76,8 @@ public class MetamodelProcessor {
    * @param metamodels uploaded ecore files
    * @param projectRoot root of the generated project
    * @return one entry per uploaded metamodel, in upload order
-   * @throws MethodologistSetupException when a metamodel is unparsable, invalid, or references a
-   *     metamodel that was not uploaded
+   * @throws VsumBuildException when a metamodel is unparsable, invalid, or references a metamodel
+   *     that was not uploaded
    * @throws IOException when writing the files fails
    */
   public List<GeneratedMetamodel> process(List<UploadedFile> metamodels, Path projectRoot)
@@ -133,7 +137,7 @@ public class MetamodelProcessor {
 
   private Map<UploadedFile, EPackage> load(
       List<UploadedFile> metamodels, ResourceSet resourceSet, Path ecoreDirectory) {
-    List<String> errors = new ArrayList<>();
+    List<BuildProblem> errors = new ArrayList<>();
     Map<UploadedFile, EPackage> packages = new LinkedHashMap<>();
     EcoreResourceFactoryImpl factory = new EcoreResourceFactoryImpl();
 
@@ -144,12 +148,17 @@ public class MetamodelProcessor {
       try {
         resource.load(new ByteArrayInputStream(metamodel.content()), Map.of());
       } catch (IOException | RuntimeException e) {
-        errors.add(metamodel.fileName() + ": not a valid Ecore file (" + rootMessage(e) + ")");
+        errors.add(notValidEcore(metamodel, e));
         continue;
       }
       if (resource.getContents().size() != 1
           || !(resource.getContents().get(0) instanceof EPackage ePackage)) {
-        errors.add(metamodel.fileName() + ": must contain exactly one root EPackage");
+        errors.add(
+            BuildProblem.of(
+                    Source.METAMODEL,
+                    metamodel.fileName(),
+                    "must contain exactly one root EPackage")
+                .withHint("Keep one root package per file; use subpackages for more"));
         continue;
       }
       packages.put(metamodel, ePackage);
@@ -184,7 +193,9 @@ public class MetamodelProcessor {
     packages.forEach(
         (file, ePackage) -> resourcesByFileName.put(file.fileName(), ePackage.eResource()));
 
-    List<String> errors = new ArrayList<>();
+    Map<String, UploadedFile> uploadsByName = new HashMap<>();
+    packages.keySet().forEach(file -> uploadsByName.put(file.fileName(), file));
+    List<BuildProblem> errors = new ArrayList<>();
     Map<EObject, Collection<EStructuralFeature.Setting>> unresolved =
         new LinkedHashMap<>(EcoreUtil.UnresolvedProxyCrossReferencer.find(resourceSet));
     for (Map.Entry<EObject, Collection<EStructuralFeature.Setting>> entry : unresolved.entrySet()) {
@@ -192,12 +203,21 @@ public class MetamodelProcessor {
       Resource candidate = resourcesByFileName.get(proxyUri.trimFragment().lastSegment());
       EObject target = candidate == null ? null : candidate.getEObject(proxyUri.fragment());
       if (target == null) {
-        URI referencingResource =
-            entry.getValue().iterator().next().getEObject().eResource().getURI();
+        EObject referencing = entry.getValue().iterator().next().getEObject();
+        String fileName = referencing.eResource().getURI().lastSegment();
+        UploadedFile upload = uploadsByName.get(fileName);
         errors.add(
-            String.format(
-                "%s: references '%s', which is not part of the uploaded metamodels",
-                referencingResource.lastSegment(), proxyUri));
+            locate(
+                    fileName,
+                    upload == null ? null : upload.text(),
+                    referencing,
+                    String.format(
+                        "%s references '%s', which is not part of the uploaded metamodels",
+                        elementPath(referencing), proxyUri))
+                .withHint(
+                    "Upload the metamodel '"
+                        + proxyUri.trimFragment().lastSegment()
+                        + "' as well, or remove the reference"));
         continue;
       }
       // derived features (e.g. eAllSuperTypes) are views on the stored features and follow them
@@ -210,7 +230,7 @@ public class MetamodelProcessor {
   }
 
   private void validate(Map<UploadedFile, EPackage> packages) {
-    List<String> errors = new ArrayList<>();
+    List<BuildProblem> errors = new ArrayList<>();
     Map<String, String> nsUris = new HashMap<>();
     Map<String, String> names = new HashMap<>();
 
@@ -218,26 +238,42 @@ public class MetamodelProcessor {
         (file, ePackage) -> {
           String fileName = file.fileName();
           if (ePackage.getName() == null || ePackage.getName().isBlank()) {
-            errors.add(fileName + ": the root EPackage has no name");
+            errors.add(
+                locate(file, ePackage, "the root EPackage has no name")
+                    .withHint("Give the root package a name, e.g. the name of the domain"));
           } else {
             String previous =
                 names.putIfAbsent(ePackage.getName().toLowerCase(Locale.ROOT), fileName);
             if (previous != null) {
               errors.add(
-                  String.format(
-                      "%s: the package name '%s' is already used by %s",
-                      fileName, ePackage.getName(), previous));
+                  locate(
+                          file,
+                          ePackage,
+                          String.format(
+                              "the package name '%s' is already used by %s",
+                              ePackage.getName(), previous))
+                      .withHint(
+                          "Each metamodel needs its own package name, ignoring case; rename one"));
             }
           }
           if (ePackage.getNsURI() == null || ePackage.getNsURI().isBlank()) {
-            errors.add(fileName + ": the root EPackage has no nsURI");
+            errors.add(
+                locate(file, ePackage, "the root EPackage has no nsURI")
+                    .withHint(
+                        "Set a unique nsURI, e.g. 'http://example.org/"
+                            + ePackage.getName()
+                            + "'"));
           } else {
             String previous = nsUris.putIfAbsent(ePackage.getNsURI(), fileName);
             if (previous != null) {
               errors.add(
-                  String.format(
-                      "%s: the nsURI '%s' is already used by %s",
-                      fileName, ePackage.getNsURI(), previous));
+                  locate(
+                          file,
+                          ePackage,
+                          String.format(
+                              "the nsURI '%s' is already used by %s",
+                              ePackage.getNsURI(), previous))
+                      .withHint("Each metamodel needs its own nsURI; change one of them"));
             }
           }
           if (ePackage.getNsPrefix() == null || ePackage.getNsPrefix().isBlank()) {
@@ -245,19 +281,74 @@ public class MetamodelProcessor {
           }
 
           Diagnostic diagnostic = Diagnostician.INSTANCE.validate(ePackage);
-          collectErrors(diagnostic, fileName, errors);
+          collectErrors(diagnostic, file, errors);
         });
     throwIfAny(errors);
   }
 
-  private void collectErrors(Diagnostic diagnostic, String fileName, List<String> errors) {
+  private void collectErrors(Diagnostic diagnostic, UploadedFile file, List<BuildProblem> errors) {
     if (diagnostic.getChildren().isEmpty()) {
       if (diagnostic.getSeverity() >= Diagnostic.ERROR) {
-        errors.add(fileName + ": " + diagnostic.getMessage());
+        EObject element =
+            diagnostic.getData().stream()
+                .filter(EObject.class::isInstance)
+                .map(EObject.class::cast)
+                .findFirst()
+                .orElse(null);
+        errors.add(
+            element == null
+                ? BuildProblem.of(Source.METAMODEL, file.fileName(), diagnostic.getMessage())
+                : locate(file, element, elementPath(element) + ": " + diagnostic.getMessage()));
       }
       return;
     }
-    diagnostic.getChildren().forEach(child -> collectErrors(child, fileName, errors));
+    diagnostic.getChildren().forEach(child -> collectErrors(child, file, errors));
+  }
+
+  /** A problem of an element, located at its {@code name="..."} attribute in the upload. */
+  private static BuildProblem locate(UploadedFile file, EObject element, String message) {
+    return locate(file.fileName(), file.text(), element, message);
+  }
+
+  private static BuildProblem locate(
+      String fileName, String text, EObject element, String message) {
+    Integer line = text == null ? null : EcoreLocations.lineOf(text, namePath(element));
+    return BuildProblem.at(Source.METAMODEL, fileName, text, line, null, message);
+  }
+
+  /** Names from the root package down to the element, e.g. [model, Component, name]. */
+  private static List<String> namePath(EObject element) {
+    List<String> names = new ArrayList<>();
+    for (EObject current = element; current != null; current = current.eContainer()) {
+      if (current instanceof ENamedElement named && named.getName() != null) {
+        names.add(0, named.getName());
+      }
+    }
+    return names;
+  }
+
+  /** Readable name of an element, e.g. {@code Component.name}. */
+  private static String elementPath(EObject element) {
+    List<String> names = namePath(element);
+    return names.size() > 1
+        ? String.join(".", names.subList(1, names.size()))
+        : String.join(".", names);
+  }
+
+  private static BuildProblem notValidEcore(UploadedFile metamodel, Exception e) {
+    Throwable root = rootCause(e);
+    if (root instanceof SAXParseException parseError && parseError.getLineNumber() > 0) {
+      return BuildProblem.at(
+              Source.METAMODEL,
+              metamodel.fileName(),
+              metamodel.text(),
+              parseError.getLineNumber(),
+              parseError.getColumnNumber() > 0 ? parseError.getColumnNumber() : null,
+              "not a valid Ecore file: " + parseError.getMessage())
+          .withHint("The file is not well-formed XML; export the metamodel again");
+    }
+    return BuildProblem.of(
+        Source.METAMODEL, metamodel.fileName(), "not a valid Ecore file (" + rootMessage(e) + ")");
   }
 
   private GenModel createGenModel(EPackage ePackage, ResourceSet resourceSet, Path ecoreDirectory) {
@@ -334,19 +425,23 @@ public class MetamodelProcessor {
     return URI.createFileURI(path.toAbsolutePath().toString());
   }
 
-  private static String rootMessage(Throwable throwable) {
+  private static Throwable rootCause(Throwable throwable) {
     Throwable current = throwable;
     while (current.getCause() != null && current.getCause() != current) {
       current = current.getCause();
     }
-    return current.getMessage() != null ? current.getMessage() : current.toString();
+    return current;
   }
 
-  private static void throwIfAny(List<String> errors) {
+  private static String rootMessage(Throwable throwable) {
+    Throwable root = rootCause(throwable);
+    return root.getMessage() != null ? root.getMessage() : root.toString();
+  }
+
+  private static void throwIfAny(List<BuildProblem> errors) {
     if (!errors.isEmpty()) {
-      throw new MethodologistSetupException(
-          VsumErrorCodes.METAMODEL_ERROR,
-          "The uploaded metamodels are invalid:\n- " + String.join("\n- ", errors));
+      throw new VsumBuildException(
+          VsumErrorCodes.METAMODEL_ERROR, "The uploaded metamodels are invalid:", errors);
     }
   }
 }

@@ -54,6 +54,12 @@ public final class ProjectLayout {
   public static final String VSUM_JAR_FILENAME =
       VSUM_ARTIFACT_ID + "-" + VERSION + "-jar-with-dependencies.jar";
 
+  /** Directory of the model module. */
+  public static final String MODEL_MODULE = "model";
+
+  /** Directory of the consistency module. */
+  public static final String CONSISTENCY_MODULE = "consistency";
+
   private ProjectLayout() {
     throw new UnsupportedOperationException("This is a utility class and cannot be instantiated");
   }
@@ -65,7 +71,7 @@ public final class ProjectLayout {
    * @return the model module directory
    */
   public static Path modelModule(Path root) {
-    return root.resolve("model");
+    return root.resolve(MODEL_MODULE);
   }
 
   /**
@@ -85,7 +91,7 @@ public final class ProjectLayout {
    * @return the consistency module directory
    */
   public static Path consistencyModule(Path root) {
-    return root.resolve("consistency");
+    return root.resolve(CONSISTENCY_MODULE);
   }
 
   /**
