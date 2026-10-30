@@ -38,14 +38,23 @@ The service starts on `http://localhost:8090`.
 
 ### Run with Docker
 
-The `Dockerfile` copies the jar from the build context root, and `target/` is excluded via
-`.dockerignore`, so the jar must be staged first:
-
 ```bash
-./mvnw clean package
-cp target/methodologist-setup-service-1.0.1.jar .
 docker compose up --build
 ```
+
+The image builds the service itself and then builds a sample VSUM project once, which fills the image's
+Maven repository (`/opt/vsum-m2`) with every dependency of the generated projects. In the container, VSUM
+builds run offline: they do not depend on Maven Central, and the first build after a deployment is as fast
+as the others. Building the image needs network access.
+
+To change the Vitruvius, VitruvOCL, EMF, or plugin versions, change them in `VsumBuildProperties` and
+rebuild the image. A version overridden at runtime (`SETUP_VSUM_*_VERSION`) that is missing from the image
+is downloaded once and logged (`setup.vsum.online-fallback`); set `SETUP_VSUM_ONLINE_FALLBACK=false` to
+fail instead.
+
+On startup, the container builds the sample project again, offline. Until that succeeds,
+`/actuator/health/readiness` reports `OUT_OF_SERVICE`, so a deployment with a broken repository or
+incompatible versions never receives traffic.
 
 ## API Endpoints
 
@@ -119,12 +128,25 @@ Genmodels are not uploaded; they are generated from the metamodels. The pipeline
 5. Runs `mvn clean verify`.
 
 Invalid inputs are rejected with `400` before Maven runs (`VSUM_INPUT_ERROR`, `VSUM_METAMODEL_ERROR`,
-`VSUM_REACTIONS_ERROR`). If the generated VSUM does not build, the response is `422` (`VSUM_BUILD_FAILED`) with
-the relevant Maven errors; a timeout is reported as `504` (`VSUM_BUILD_TIMEOUT`).
+`VSUM_REACTIONS_ERROR`). Failed Maven builds are classified by their output, so that only problems of the
+uploads are reported as such:
+
+| Status | Error code               | Cause                                                                                     |
+|--------|--------------------------|-------------------------------------------------------------------------------------------|
+| `422`  | `VSUM_BUILD_FAILED`      | The uploaded metamodels, reactions, or constraints do not compile, or the smoke test fails |
+| `503`  | `VSUM_BUILD_UNAVAILABLE` | The build environment failed (dependency download, disk space, memory); retried once first |
+| `500`  | `VSUM_INTERNAL_ERROR`    | Code the service generates itself does not build, or the library versions are incompatible |
+| `504`  | `VSUM_BUILD_TIMEOUT`     | The build exceeded `setup.vsum.build-timeout`; the message names the module being built   |
+
+The workspaces of `503` and `500` builds are kept in the temporary directory for debugging and deleted on a
+later startup once older than `setup.vsum.workspace-retention`.
 
 Build settings are configured with `setup.vsum.*` properties (see `VsumBuildProperties`), e.g.
 `setup.vsum.build-timeout`, `setup.vsum.max-concurrent-builds`, `setup.vsum.maven-arguments`,
-the Vitruvius/VitruvOCL versions, and `setup.vsum.keep-failed-workspaces` for debugging.
+`setup.vsum.maven-repository`, `setup.vsum.offline`, `setup.vsum.maven-opts` (the builds' JVM options;
+the service's `JAVA_TOOL_OPTIONS` are not passed on), the Vitruvius/VitruvOCL versions, and
+`setup.vsum.keep-failed-workspaces` for debugging. Concurrent builds share the local repository with
+file locking (Maven 3.9+).
 
 ## Standardization Rules
 
@@ -170,6 +192,8 @@ src/main/resources/templates/vsum/ # FreeMarker templates for generated VSUM pro
 
 ```bash
 curl http://localhost:8090/actuator/health
+curl http://localhost:8090/actuator/health/liveness
+curl http://localhost:8090/actuator/health/readiness   # includes the VSUM build warm-up
 ```
 
 ## Configuration
@@ -187,7 +211,7 @@ Default settings:
 ## Technologies
 
 - **Framework**: Spring Boot 4.0.6
-- **Modeling**: Eclipse EMF 2.35.0 (Ecore, XMI, Codegen)
+- **Modeling**: Eclipse EMF (Ecore 2.43.0, XMI 2.41.0, Codegen 2.47.0)
 - **Templating**: FreeMarker
 - **API Docs**: springdoc-openapi 3.0.0
 - **Logging**: Logback with logstash JSON encoder
@@ -198,12 +222,14 @@ Default settings:
 
 ```bash
 ./mvnw clean verify        # full build with tests
+./mvnw verify -Dvsum.integration=true   # also builds generated VSUM projects with Maven
 ./mvnw spotless:apply      # auto-format sources
 ./mvnw checkstyle:check    # style check against checkstyle.xml
 ```
 
-CI (`.github/workflows/ci.yml`) runs `mvnw clean verify` on PRs to `main` and `develop`, plus
-nightly SonarQube analysis and a Checkstyle review pass.
+CI (`.github/workflows/ci.yml`) runs `mvnw clean verify` on PRs to `main` and `develop`, builds
+generated VSUM projects with Maven, builds the Docker image and checks that it builds VSUMs offline,
+plus nightly SonarQube analysis and a Checkstyle review pass.
 
 ## Error Handling
 
@@ -213,7 +239,9 @@ All requests return appropriate HTTP status codes:
 - `400 Bad Request`: Invalid input or processing error
 - `413 Content Too Large`: Uploads exceed the configured size limit
 - `422 Unprocessable Content`: Invalid GenModel, or the generated VSUM does not build
-- `500 Internal Server Error`: Unexpected server error
+- `500 Internal Server Error`: Unexpected server error, or the generated VSUM project fails for reasons
+  of the service itself (`VSUM_INTERNAL_ERROR`)
+- `503 Service Unavailable`: The VSUM build environment failed; retrying later may succeed
 - `504 Gateway Timeout`: The VSUM build exceeded its timeout
 
 Errors are handled centrally in `GlobalExceptionHandler` and returned as structured responses with

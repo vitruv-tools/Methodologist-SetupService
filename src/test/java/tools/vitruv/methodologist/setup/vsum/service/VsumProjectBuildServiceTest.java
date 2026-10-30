@@ -1,7 +1,12 @@
 package tools.vitruv.methodologist.setup.vsum.service;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static tools.vitruv.methodologist.setup.vsum.service.TestFiles.fixture;
 import static tools.vitruv.methodologist.setup.vsum.service.TestFiles.text;
 
@@ -13,10 +18,15 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.jar.JarInputStream;
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.springframework.http.HttpStatus;
+import tools.vitruv.methodologist.setup.exception.MethodologistSetupException;
 import tools.vitruv.methodologist.setup.vsum.service.build.MavenBuildRunner;
 import tools.vitruv.methodologist.setup.vsum.service.constraints.ConstraintsProcessor;
 import tools.vitruv.methodologist.setup.vsum.service.metamodel.MetamodelProcessor;
@@ -73,8 +83,9 @@ class VsumProjectBuildServiceTest {
     }
 
     String rootPom = Files.readString(projectRoot.resolve("pom.xml"));
-    assertTrue(rootPom.contains("<version>${vitruv.version}</version>"), rootPom);
-    assertTrue(rootPom.contains("<vitruv.version>4.0.0</vitruv.version>"), rootPom);
+    assertTrue(rootPom.contains("<version>${vitruv.change.version}</version>"), rootPom);
+    assertTrue(rootPom.contains("<vitruv.change.version>4.0.1</vitruv.change.version>"), rootPom);
+    assertTrue(rootPom.contains("<vitruv.dsls.version>4.0.0</vitruv.dsls.version>"), rootPom);
 
     String workflow = Files.readString(projectRoot.resolve("model/workflow/generate.mwe2"));
     assertTrue(
@@ -98,6 +109,50 @@ class VsumProjectBuildServiceTest {
 
     assertTrue(
         Files.readString(projectRoot.resolve("vsum/pom.xml")).contains("vitruvocl-language"));
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "VSUM_INTERNAL_ERROR, true",
+    "VSUM_BUILD_UNAVAILABLE, true",
+    "VSUM_BUILD_FAILED, false",
+    "VSUM_BUILD_TIMEOUT, false"
+  })
+  void keepsTheWorkspacesOfFailuresNotCausedByTheUploads(String errorCode, boolean kept)
+      throws IOException {
+    MavenBuildRunner mavenBuildRunner = mock(MavenBuildRunner.class);
+    doThrow(
+            new MethodologistSetupException(
+                errorCode, "failed", HttpStatus.INTERNAL_SERVER_ERROR, null))
+        .when(mavenBuildRunner)
+        .build(any(), any());
+    VsumProjectBuildService failing =
+        new VsumProjectBuildService(
+            new MetamodelProcessor(),
+            new ReactionsProcessor(),
+            new ConstraintsProcessor(),
+            new NeoJoinViewDefinitionProcessor(),
+            new ProjectGenerator(properties),
+            mavenBuildRunner,
+            properties);
+    Set<Path> before = buildWorkspaces();
+
+    MethodologistSetupException exception =
+        assertThrows(
+            MethodologistSetupException.class, () -> failing.buildProjectJar(TEMPLATE_REQUEST));
+
+    assertEquals(errorCode, exception.getErrorCode());
+    Set<Path> added = new HashSet<>(buildWorkspaces());
+    added.removeAll(before);
+    assertEquals(kept ? 1 : 0, added.size(), added.toString());
+    for (Path workspace : added) {
+      assertTrue(Files.isDirectory(workspace.resolve("project/vsum")), "the generated project");
+      try (Stream<Path> paths = Files.walk(workspace)) {
+        for (Path path : paths.sorted(java.util.Comparator.reverseOrder()).toList()) {
+          Files.delete(path);
+        }
+      }
+    }
   }
 
   @Test
@@ -143,5 +198,18 @@ class VsumProjectBuildServiceTest {
     assertTrue(
         entries.contains("tools/vitruv/methodologisttemplate/model/model/ModelPackage.class"));
     assertTrue(entries.contains("tools/vitruv/methodologisttemplate/consistency/constraints.ocl"));
+  }
+
+  private static Set<Path> buildWorkspaces() throws IOException {
+    try (Stream<Path> paths = Files.list(Path.of(System.getProperty("java.io.tmpdir")))) {
+      return new HashSet<>(
+          paths
+              .filter(
+                  path ->
+                      path.getFileName()
+                          .toString()
+                          .startsWith(VsumProjectBuildService.WORKSPACE_PREFIX))
+              .toList());
+    }
   }
 }
