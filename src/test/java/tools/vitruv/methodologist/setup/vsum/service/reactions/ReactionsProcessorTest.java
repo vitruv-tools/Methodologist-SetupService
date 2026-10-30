@@ -16,6 +16,9 @@ import tools.vitruv.methodologist.setup.exception.MethodologistSetupException;
 import tools.vitruv.methodologist.setup.vsum.service.UploadedFile;
 import tools.vitruv.methodologist.setup.vsum.service.VsumErrorCodes;
 import tools.vitruv.methodologist.setup.vsum.service.metamodel.GeneratedMetamodel;
+import tools.vitruv.methodologist.setup.vsum.service.problem.BuildProblem;
+import tools.vitruv.methodologist.setup.vsum.service.problem.BuildProblem.Source;
+import tools.vitruv.methodologist.setup.vsum.service.problem.VsumBuildException;
 import tools.vitruv.methodologist.setup.vsum.service.project.ProjectLayout;
 
 class ReactionsProcessorTest {
@@ -89,7 +92,7 @@ class ReactionsProcessorTest {
             execute actions in source
             "reactions: FakeString"
             'reactions: FakeSingleQuotedString // not a comment'
-            \u0027\u0027\u0027reactions: FakeRichString\u0027\u0027\u0027
+            '''reactions: FakeRichString'''
             reactions: ^brake2CAD
             in reaction to changes in source
             execute actions in source
@@ -180,11 +183,14 @@ class ReactionsProcessorTest {
             () -> processor.process(List.of(reactions), METAMODELS, projectRoot));
 
     assertEquals(VsumErrorCodes.REACTIONS_ERROR, exception.getErrorCode());
-    assertTrue(
-        exception
-            .getMessage()
-            .contains("did you mean 'http://vitruv.tools/methodologisttemplate/model2'"),
-        exception.getMessage());
+    BuildProblem problem = ((VsumBuildException) exception).getProblems().get(0);
+    assertEquals(Source.REACTIONS, problem.source());
+    assertEquals("wrong.reactions", problem.file());
+    assertEquals(1, problem.line());
+    assertEquals(8, problem.column());
+    assertEquals("import \"http://example.org/model2\" as model2\n       ^", problem.excerpt());
+    assertEquals(
+        "Did you mean 'http://vitruv.tools/methodologisttemplate/model2'?", problem.hint());
   }
 
   @Test

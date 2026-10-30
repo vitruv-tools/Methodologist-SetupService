@@ -22,6 +22,9 @@ import org.junit.jupiter.api.io.TempDir;
 import tools.vitruv.methodologist.setup.exception.MethodologistSetupException;
 import tools.vitruv.methodologist.setup.vsum.service.UploadedFile;
 import tools.vitruv.methodologist.setup.vsum.service.VsumErrorCodes;
+import tools.vitruv.methodologist.setup.vsum.service.problem.BuildProblem;
+import tools.vitruv.methodologist.setup.vsum.service.problem.BuildProblem.Source;
+import tools.vitruv.methodologist.setup.vsum.service.problem.VsumBuildException;
 import tools.vitruv.methodologist.setup.vsum.service.project.ProjectLayout;
 
 class MetamodelProcessorTest {
@@ -133,7 +136,8 @@ class MetamodelProcessorTest {
                 .text()
                 .replace(
                     "name=\"Protocol\">",
-                    "name=\"Protocol\" abstract=\"true\" interface=\"true\" eSuperTypes=\"#//Protocol\">"));
+                    "name=\"Protocol\" abstract=\"true\" interface=\"true\""
+                        + " eSuperTypes=\"#//Protocol\">"));
 
     MethodologistSetupException exception =
         assertThrows(
@@ -141,8 +145,13 @@ class MetamodelProcessorTest {
             () -> processor.process(List.of(invalid), projectRoot));
 
     assertEquals(VsumErrorCodes.METAMODEL_ERROR, exception.getErrorCode());
-    assertTrue(exception.getMessage().contains("invalid.ecore: "), exception.getMessage());
     assertFalse(exception.getMessage().contains("not a valid Ecore file"), exception.getMessage());
+    BuildProblem problem = ((VsumBuildException) exception).getProblems().get(0);
+    assertEquals(Source.METAMODEL, problem.source());
+    assertEquals("invalid.ecore", problem.file());
+    assertEquals("Protocol: A class may not be a super type of itself", problem.message());
+    assertEquals(16, problem.line());
+    assertTrue(problem.excerpt().contains("name=\"Protocol\""), problem.excerpt());
   }
 
   private static GenModel loadGenModel(Path genmodel) {

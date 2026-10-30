@@ -14,8 +14,9 @@ class BuildFailureTest {
   @ParameterizedTest
   @ValueSource(
       strings = {
-        "[ERROR] Failed to execute goal on project tools.vitruv.methodologisttemplate.vsum: Could not"
-            + " resolve dependencies for project tools.vitruv:tools.vitruv.methodologisttemplate.vsum"
+        "[ERROR] Failed to execute goal on project tools.vitruv.methodologisttemplate.vsum:"
+            + " Could not resolve dependencies for project"
+            + " tools.vitruv:tools.vitruv.methodologisttemplate.vsum"
             + ":jar:0.1.0-SNAPSHOT",
         "[ERROR] Failed to execute goal on project x: Could not transfer artifact"
             + " tools.vitruv:tools.vitruv.change.atomic:jar:4.0.1 from/to central"
@@ -74,7 +75,8 @@ class BuildFailureTest {
         BuildFailure.classify(
             List.of(
                 "[ERROR] tools.vitruv.methodologisttemplate.vsum.VSUMExampleTest"
-                    + ".virtualModelCanBeCreatedAndReloaded(Path) -- Time elapsed: 0.511 s <<< ERROR!",
+                    + ".virtualModelCanBeCreatedAndReloaded(Path) -- Time elapsed: 0.511 s <<<"
+                    + " ERROR!",
                 "java.lang.NoSuchMethodError: 'void tools.vitruv.change.propagation"
                     + ".ChangePropagationSpecificationRepository.<init>(java.lang.Iterable,"
                     + " java.util.Map)'",
@@ -114,7 +116,8 @@ class BuildFailureTest {
                 "[ERROR] ERROR:mismatched input 'java' expecting RULE_STRING (file:/tmp/vsum-build-"
                     + "1/project/consistency/src/main/reactions/a.reactions line : 4 column : 8)",
                 "[ERROR] Failed to execute goal org.eclipse.xtext:xtext-maven-plugin:2.43.0:"
-                    + "generate (default) on project tools.vitruv.methodologisttemplate.consistency:"
+                    + "generate (default) on project"
+                    + " tools.vitruv.methodologisttemplate.consistency:"
                     + " Execution failed due to a severe validation error. -> [Help 1]"));
 
     assertEquals(BuildFailure.INPUT, failure);
@@ -141,6 +144,7 @@ class BuildFailureTest {
                 "[WARNING] Could not transfer metadata tools.vitruv.dsls:vitruvocl-language:"
                     + "0.1.0-SNAPSHOT/maven-metadata.xml from/to central-portal-snapshots:"
                     + " Connection reset",
-                "[ERROR] ERROR:cad cannot be resolved. (file:/a.reactions line : 18 column : 31)")));
+                "[ERROR] ERROR:cad cannot be resolved. (file:/a.reactions line : 18 column :"
+                    + " 31)")));
   }
 }

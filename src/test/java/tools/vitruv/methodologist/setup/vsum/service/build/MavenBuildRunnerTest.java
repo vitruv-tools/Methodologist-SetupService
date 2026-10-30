@@ -31,7 +31,8 @@ class MavenBuildRunnerTest {
         log,
         List.of(
             "[INFO] Building model",
-            "[ERROR]   VSUMExampleTest.constraintsCanBeEvaluated:29 Constraints cannot be evaluated:",
+            "[ERROR]   VSUMExampleTest.constraintsCanBeEvaluated:29 Constraints cannot be"
+                + " evaluated:",
             "- context model::Component inv broken: self.x",
             "    1:5 Unknown feature 'x'",
             "[INFO] Results:",
@@ -45,7 +46,8 @@ class MavenBuildRunnerTest {
     assertEquals(
         String.join(
             "\n",
-            "[ERROR]   VSUMExampleTest.constraintsCanBeEvaluated:29 Constraints cannot be evaluated:",
+            "[ERROR]   VSUMExampleTest.constraintsCanBeEvaluated:29 Constraints cannot be"
+                + " evaluated:",
             "- context model::Component inv broken: self.x",
             "    1:5 Unknown feature 'x'",
             "[ERROR] Failed to execute goal surefire on project vsum: There are test failures."),

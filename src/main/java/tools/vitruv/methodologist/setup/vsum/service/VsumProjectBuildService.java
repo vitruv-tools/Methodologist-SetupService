@@ -15,10 +15,16 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import tools.vitruv.methodologist.setup.exception.MethodologistSetupException;
 import tools.vitruv.methodologist.setup.messages.ErrorMessages;
+import tools.vitruv.methodologist.setup.vsum.service.build.MavenBuildFailedException;
 import tools.vitruv.methodologist.setup.vsum.service.build.MavenBuildRunner;
 import tools.vitruv.methodologist.setup.vsum.service.constraints.ConstraintsProcessor;
 import tools.vitruv.methodologist.setup.vsum.service.metamodel.GeneratedMetamodel;
 import tools.vitruv.methodologist.setup.vsum.service.metamodel.MetamodelProcessor;
+import tools.vitruv.methodologist.setup.vsum.service.problem.BuildOutputParser;
+import tools.vitruv.methodologist.setup.vsum.service.problem.BuildProblem.Source;
+import tools.vitruv.methodologist.setup.vsum.service.problem.ProjectSources;
+import tools.vitruv.methodologist.setup.vsum.service.problem.ProjectSources.SourceFile;
+import tools.vitruv.methodologist.setup.vsum.service.problem.VsumBuildException;
 import tools.vitruv.methodologist.setup.vsum.service.project.ProjectGenerator;
 import tools.vitruv.methodologist.setup.vsum.service.project.ProjectLayout;
 import tools.vitruv.methodologist.setup.vsum.service.reactions.ReactionsProcessor;
@@ -73,8 +79,13 @@ public class VsumProjectBuildService {
     try {
       workspace = Files.createTempDirectory(WORKSPACE_PREFIX);
       Path projectRoot = workspace.resolve("project");
-      generateProject(request, projectRoot);
-      mavenBuildRunner.build(projectRoot, workspace);
+      ProjectSources sources = generateProject(request, projectRoot);
+      try {
+        mavenBuildRunner.build(projectRoot, workspace);
+      } catch (MavenBuildFailedException e) {
+        throw new VsumBuildException(
+            e.getErrorCode(), e.getHeader(), BuildOutputParser.parse(e, sources), e.getStatus());
+      }
       return extractor.extract(projectRoot);
     } catch (MethodologistSetupException e) {
       keepWorkspace = properties.isKeepFailedWorkspaces() || isNotCausedByTheUploads(e);
@@ -109,9 +120,10 @@ public class VsumProjectBuildService {
    *
    * @param request the build inputs
    * @param projectRoot directory to generate the project into
+   * @return where the uploads were placed, to attribute build errors to them
    * @throws IOException when writing the project fails
    */
-  void generateProject(VsumBuildRequest request, Path projectRoot) throws IOException {
+  ProjectSources generateProject(VsumBuildRequest request, Path projectRoot) throws IOException {
     List<GeneratedMetamodel> metamodels =
         metamodelProcessor.process(request.metamodels(), projectRoot);
     List<String> specifications =
@@ -120,6 +132,59 @@ public class VsumProjectBuildService {
         constraintsProcessor.process(request.constraints(), projectRoot);
     viewDefinitionProcessor.process(request.viewDefinitions(), metamodels, projectRoot);
     projectGenerator.generate(projectRoot, metamodels, specifications, constraintResources);
+    return sources(request, metamodels, constraintResources, projectRoot);
+  }
+
+  private static ProjectSources sources(
+      VsumBuildRequest request,
+      List<GeneratedMetamodel> metamodels,
+      List<String> constraintResources,
+      Path projectRoot) {
+    ProjectSources sources = new ProjectSources(projectRoot);
+    // the metamodel processor returns one entry per upload, in upload order
+    for (int i = 0; i < metamodels.size() && i < request.metamodels().size(); i++) {
+      GeneratedMetamodel metamodel = metamodels.get(i);
+      SourceFile file =
+          sources.add(
+              Source.METAMODEL,
+              ProjectLayout.ecoreDirectory(projectRoot).resolve(metamodel.ecoreFileName()),
+              request.metamodels().get(i),
+              null);
+      for (GeneratedMetamodel.GeneratedPackage generated : metamodel.packages()) {
+        String packageInterface = generated.packageInterface();
+        sources.addMetamodelPackage(
+            packageInterface.substring(0, packageInterface.lastIndexOf('.')), file);
+      }
+    }
+    for (UploadedFile reactions : request.reactions()) {
+      String text = reactions.text();
+      SourceFile file =
+          sources.add(
+              Source.REACTIONS,
+              ProjectLayout.reactionsDirectory(projectRoot).resolve(reactions.fileName()),
+              reactions,
+              ReactionsProcessor.uploadedLines(text));
+      ReactionsProcessor.segments(ReactionsProcessor.stripComments(text))
+          .forEach(segment -> sources.addSegment(segment.name(), file));
+    }
+    for (int i = 0; i < constraintResources.size() && i < request.constraints().size(); i++) {
+      UploadedFile constraints = request.constraints().get(i);
+      SourceFile file =
+          sources.add(
+              Source.CONSTRAINTS,
+              ProjectLayout.constraintsDirectory(projectRoot).resolve(constraints.fileName()),
+              constraints,
+              null);
+      sources.addConstraintResource(constraintResources.get(i), file);
+    }
+    for (UploadedFile view : request.viewDefinitions()) {
+      sources.add(
+          Source.VIEWS,
+          ProjectLayout.viewsDirectory(projectRoot).resolve(view.fileName()),
+          view,
+          null);
+    }
+    return sources;
   }
 
   private static byte[] readVsumJar(Path projectRoot) throws IOException {
