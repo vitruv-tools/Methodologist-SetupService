@@ -47,8 +47,8 @@
 <#if hasConstraints>
   <!-- OCL constraints of the project, registered in VSUMExample -->
   <dependency>
-    <groupId>tools.vitruv.dsls</groupId>
-    <artifactId>vitruvocl-language</artifactId>
+    <groupId>tools.vitruv</groupId>
+    <artifactId>tools.vitruv.vitruvocl.language</artifactId>
   </dependency>
 </#if>
 <!-- project dependencies -->

@@ -217,16 +217,17 @@ overridden with `vsum.generator.versions.{parent,change,framework,dsls,server,vi
 | Property | Default | Artifacts |
 | --- | --- | --- |
 | `parent` | `4.0.0` | `tools.vitruv:parent` |
-| `change` | `4.0.1` | `tools.vitruv.change.*` |
+| `change` | `4.0.2-SNAPSHOT` | `tools.vitruv.change.*`, must provide `Uuid.getRawValue()` |
 | `framework` | `4.0.2-SNAPSHOT` | `tools.vitruv.framework.*`, must provide the constraint SPI |
 | `dsls` | `4.0.0` | Reactions language and runtime |
 | `server` | `4.0.1-SNAPSHOT` | `tools.vitruv.server.remote`, must provide the constraint endpoints |
-| `vitruvocl` | `0.1.0-SNAPSHOT` | `tools.vitruv.dsls:vitruvocl-language` |
+| `vitruvocl` | `0.1.0-SNAPSHOT` | `tools.vitruv:tools.vitruv.vitruvocl.language` from [VitruviusOCL](https://github.com/vitruv-tools/VitruviusOCL) |
 
 Snapshot versions are resolved from the Maven Central snapshots. The service builds the projects
 with the local Maven installation, so artifacts installed into the local repository
-(`mvn install`) are used as well — e.g. to test unreleased changes of Vitruv, VitruvOCL, or the
-Vitruv-Server. When running the service in Docker, the container has its own Maven repository.
+(`mvn install`) are used as well — e.g. to test unreleased changes of Vitruv-Change, Vitruv,
+VitruviusOCL, or the Vitruv-Server (install them in this order). When running the service in
+Docker, the container has its own Maven repository.
 
 Generated VSUM jars need Java 21 to run.
 

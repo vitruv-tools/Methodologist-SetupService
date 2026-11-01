@@ -102,8 +102,8 @@
         <version>${vitruv-server.version}</version>
       </dependency>
       <dependency>
-        <groupId>tools.vitruv.dsls</groupId>
-        <artifactId>vitruvocl-language</artifactId>
+        <groupId>tools.vitruv</groupId>
+        <artifactId>tools.vitruv.vitruvocl.language</artifactId>
         <version>${vitruvocl.version}</version>
       </dependency>
 

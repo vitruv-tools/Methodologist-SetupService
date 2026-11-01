@@ -39,7 +39,8 @@ class GenerateFromTemplateConstraintsTest {
 
     generator.generateRootPom(target.toFile(), PACKAGE_NAME);
 
-    String content = Files.readString(target);
+    // templates may have CRLF line endings depending on the checkout
+    String content = Files.readString(target).replace("\r\n", "\n");
     assertTrue(content.contains("<artifactId>parent</artifactId>\n    <version>9.0.0</version>"));
     assertTrue(content.contains("<vitruv-change.version>9.1.0</vitruv-change.version>"));
     assertTrue(content.contains("<vitruv.version>9.2.0-SNAPSHOT</vitruv.version>"));
@@ -71,9 +72,9 @@ class GenerateFromTemplateConstraintsTest {
     generator.generateVsumPom(without.toFile(), PACKAGE_NAME);
     generator.generateVsumPom(with.toFile(), PACKAGE_NAME, true);
 
-    assertFalse(Files.readString(without).contains("vitruvocl-language"));
+    assertFalse(Files.readString(without).contains("tools.vitruv.vitruvocl.language"));
     String content = Files.readString(with);
-    assertTrue(content.contains("<artifactId>vitruvocl-language</artifactId>"));
+    assertTrue(content.contains("<artifactId>tools.vitruv.vitruvocl.language</artifactId>"));
     assertFalse(content.contains("3.2.3"));
   }
 

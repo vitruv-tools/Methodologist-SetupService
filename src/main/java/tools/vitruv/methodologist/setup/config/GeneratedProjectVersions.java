@@ -17,7 +17,7 @@ public class GeneratedProjectVersions {
   private String parent = "4.0.0";
 
   /** Version of the Vitruv-Change artifacts ({@code tools.vitruv.change.*}). */
-  private String change = "4.0.1";
+  private String change = "4.0.2-SNAPSHOT";
 
   /** Version of the Vitruv framework artifacts ({@code tools.vitruv.framework.*}). */
   private String framework = "4.0.2-SNAPSHOT";
@@ -28,6 +28,6 @@ public class GeneratedProjectVersions {
   /** Version of the Vitruv server ({@code tools.vitruv.server.remote}). */
   private String server = "4.0.1-SNAPSHOT";
 
-  /** Version of VitruvOCL ({@code tools.vitruv.dsls:vitruvocl-language}). */
+  /** Version of VitruvOCL ({@code tools.vitruv:tools.vitruv.vitruvocl.language}). */
   private String vitruvocl = "0.1.0-SNAPSHOT";
 }
