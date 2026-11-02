@@ -154,6 +154,9 @@ public class VsumProjectBuildService {
           ConstraintUploads.write(uploadWorkspace.resolve("constraints"), constraintFiles);
       ConstraintUploads.checkMetamodels(
           copiedConstraintFiles, extractMetamodelPackageNames(modelPairs));
+      ConstraintTypeCheck.check(
+          copiedConstraintFiles,
+          modelPairs.stream().map(VsumService.ModelFiles::metamodelFile).toList());
       return generator.generate(
           modelPairs, copiedReactionFiles, copiedConstraintFiles, metamodelNamespaceMap);
     } catch (IOException | MissingModelException e) {

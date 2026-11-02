@@ -89,8 +89,8 @@ final class ConstraintUploads {
   /**
    * Checks that every context declaration names its metamodel and that the metamodel is one of the
    * given metamodels, so that invalid constraints fail fast with a clear message instead of failing
-   * the VSUM at runtime. The constraints are not parsed completely, so other errors are only
-   * detected when the VSUM loads them.
+   * the VSUM at runtime. Other errors are found by compiling the constraints, see {@link
+   * ConstraintTypeCheck}.
    *
    * @param constraintFiles the constraint files
    * @param metamodelNames the package names of the uploaded metamodels

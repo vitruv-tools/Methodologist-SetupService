@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.io.File;
@@ -95,6 +96,61 @@ class VsumProjectBuildServiceConstraintsTest {
   }
 
   @Test
+  void rejectsConstraintsWithTypeErrorsBeforeTheBuild() {
+    assertThatThrownBy(
+            () ->
+                service.buildProjectJar(
+                    List.of(metamodel()),
+                    List.of(genmodel()),
+                    List.of(reaction()),
+                    List.of(
+                        constraint(
+                            "Prices.ocl",
+                            "-- prices\ncontext pcm::Item inv heavy: self.weight > 0"))))
+        .isInstanceOf(MethodologistSetupException.class)
+        .hasMessageContaining("Constraint file Prices.ocl has errors")
+        .hasMessageContaining("line 2, column " + "context pcm::Item inv heavy: self.".length())
+        .hasMessageContaining("weight");
+    verifyNoInteractions(vsumService);
+  }
+
+  @Test
+  void rejectsConstraintsWithSyntaxErrorsBeforeTheBuild() {
+    assertThatThrownBy(
+            () ->
+                service.buildProjectJar(
+                    List.of(metamodel()),
+                    List.of(genmodel()),
+                    List.of(reaction()),
+                    List.of(constraint("Prices.ocl", "context pcm::Item inv a: self.price >"))))
+        .isInstanceOf(MethodologistSetupException.class)
+        .hasMessageContaining("Constraint file Prices.ocl has errors")
+        .hasMessageContaining("line 1");
+    verifyNoInteractions(vsumService);
+  }
+
+  @Test
+  void acceptsValidConstraintsWithImports() throws Exception {
+    when(vsumService.generateProjectJar(anyList(), anyList(), anyList(), anyMap()))
+        .thenReturn(new byte[] {3});
+
+    byte[] jar =
+        service.buildProjectJar(
+            List.of(metamodel()),
+            List.of(genmodel()),
+            List.of(reaction()),
+            List.of(
+                constraint(
+                    "Prices.ocl",
+                    "import pcm : 'http://pcm'\n"
+                        + "context pcm::Item\n"
+                        + "  inv positive: self.price > 0\n"
+                        + "  inv cheap: self.price < 1000")));
+
+    assertThat(jar).containsExactly(3);
+  }
+
+  @Test
   void rejectsEmptyConstraintFiles() {
     assertThatThrownBy(
             () ->
@@ -135,8 +191,15 @@ class VsumProjectBuildServiceConstraintsTest {
         "application/xml",
         """
         <?xml version="1.0" encoding="UTF-8"?>
-        <ecore:EPackage xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore"
-            name="pcm" nsURI="http://pcm" nsPrefix="pcm"/>
+        <ecore:EPackage xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore"
+            name="pcm" nsURI="http://pcm" nsPrefix="pcm">
+          <eClassifiers xsi:type="ecore:EClass" name="Item">
+            <eStructuralFeatures xsi:type="ecore:EAttribute" name="price"
+                eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EInt"/>
+          </eClassifiers>
+        </ecore:EPackage>
         """
             .getBytes(StandardCharsets.UTF_8));
   }
