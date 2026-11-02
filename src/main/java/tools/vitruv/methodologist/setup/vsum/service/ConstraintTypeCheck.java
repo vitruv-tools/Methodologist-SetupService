@@ -16,8 +16,11 @@ import tools.vitruv.methodologist.setup.exception.MethodologistSetupException;
  * with invalid constraints is not built: the generated VSUM would load the constraints only when it
  * starts, and fail then.
  *
- * <p>The metamodels are loaded into a wrapper of each check instead of the global package registry,
- * so concurrent builds do not affect each other.
+ * <p>The metamodels are loaded into a wrapper of each check, which resolves the types of the
+ * constraints, so concurrent builds type-check against their own metamodels. The wrapper also
+ * registers the packages by nsURI in the global {@link org.eclipse.emf.ecore.EPackage.Registry}:
+ * there, builds with the same nsURI replace each other's packages, and the packages stay registered
+ * after the check.
  */
 final class ConstraintTypeCheck {
   private static final String VSUM_INPUT_ERROR_CODE = "VSUM_INPUT_ERROR";
