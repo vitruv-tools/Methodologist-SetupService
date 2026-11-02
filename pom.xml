@@ -33,6 +33,9 @@
         <sonar.organization>vitruv-tools</sonar.organization>
         <sonar.projectKey>vitruv-tools_Methodologist-SetupService</sonar.projectKey>
 
+        <!-- type-checks uploaded OCL constraints before a VSUM is generated; keep equal to the
+             VitruviusOCL version in GeneratedProjectVersions -->
+        <vitruvocl.version>0.1.0-SNAPSHOT</vitruvocl.version>
     </properties>
     <dependencies>
         <dependency>
@@ -68,6 +71,11 @@
             <groupId>org.eclipse.emf</groupId>
             <artifactId>org.eclipse.emf.codegen.ecore</artifactId>
             <version>2.35.0</version>
+        </dependency>
+        <dependency>
+            <groupId>tools.vitruv</groupId>
+            <artifactId>tools.vitruv.vitruvocl.language</artifactId>
+            <version>${vitruvocl.version}</version>
         </dependency>
 
         <dependency>
