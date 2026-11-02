@@ -121,8 +121,10 @@ Genmodels are not uploaded; they are generated from the metamodels. The pipeline
 
 1. Validates the uploads (non-empty, expected extension, unique names).
 2. Loads the metamodels, resolves references between them (relative, `platform:/resource`, or nsURI),
-   validates them with EMF, and generates matching genmodels.
-3. Checks that every Reactions `import` refers to an uploaded nsURI.
+   validates them with EMF, rejects names whose generated Java code does not compile, and generates
+   matching genmodels.
+3. Checks the reactions against the loaded metamodels: every `import` refers to an uploaded nsURI, and
+   aliases, classes, and trigger features exist and fit (see [Checks before the build](#checks-before-the-build)).
 4. Generates a project following the [Methodologist Template](https://github.com/vitruv-tools/Methodologist-Template)
    (`model`, `consistency`, `vsum`), with a smoke test that creates and reloads the VSUM and compiles the constraints.
 5. Runs `mvn clean verify`.
@@ -144,17 +146,18 @@ contains the same as readable text:
 
 ```json
 {
-  "errorCode": "VSUM_BUILD_FAILED",
-  "status": 422,
-  "message": "The VSUM build failed:\n\nmy.reactions:\n- line 51, column 30: 'Entitiy' cannot be resolved\n...",
+  "errorCode": "VSUM_REACTIONS_ERROR",
+  "status": 400,
+  "message": "The uploaded reactions do not match the uploaded metamodels:\n\nmy.reactions:\n- line 51, column 30: ...",
   "problems": [
     {
       "source": "REACTIONS",
       "file": "my.reactions",
       "line": 51,
       "column": 30,
-      "message": "'Entitiy' cannot be resolved",
-      "excerpt": "    val entity = new model2::Entitiy\n                             ^"
+      "message": "'Entitiy' is not a class of the metamodel 'model2' (http://vitruv.tools/methodologisttemplate/model2)",
+      "excerpt": "    val entity = new model2::Entitiy\n                             ^",
+      "hint": "Did you mean 'Entity'?"
     }
   ]
 }
@@ -166,6 +169,41 @@ follow from another one, e.g. everything after a syntax error in the same reacti
 but counted in `hiddenFollowUpErrors`. Problems are reported for metamodels and reactions rejected before
 the build, for Reactions compiler and Java compiler errors, and for failures of the smoke test (constraints
 that cannot be evaluated, exceptions in reactions or routines while creating the VSUM).
+
+### Checks before the build
+
+Most mistakes are found in milliseconds, before Maven runs, and come with a suggestion:
+
+- **Metamodels**: EMF validation, with messages naming the element (`Thing.untyped`) and a hint; names
+  that differ only in upper/lower case or `_` (classes, features including inherited ones, enum
+  literals), Java reserved words as class names (`class`, `record`, `var`), and classes named like the
+  generated `<Package>Package`/`<Package>Factory` interfaces. EMF escapes reserved words in feature,
+  literal, and package names, so these are accepted.
+- **Reactions**: aliases in segment headers and before `::`, `alias::Class` (including subpackages and
+  `using qualified names`), `[feature]` in triggers (attribute for `after attribute`, reference for
+  `after element`, single-valued for `replaced at`, many-valued for `inserted in`/`removed from`, and an
+  element type that fits the reference), and abstract classes, interfaces, or enums in `create` blocks.
+
+Errors only the Reactions compiler finds (syntax, Xbase expressions) are reported after the build, with a
+hint from a catalog of compiler messages (`CompilerHints`).
+
+#### Dependency on the Reactions language
+
+The reactions checks (`ReactionsChecker`) do not use the Reactions language
+(`tools.vitruv.dsls.reactions.language`); they reimplement the rules of its grammar
+(`ReactionsLanguage.xtext`), scope provider (`CommonLanguageElementsScopeProvider`,
+`ReactionsLanguageScopeProvider`), and validator (`ReactionsLanguageValidator`) in
+[Vitruv-DSLs](https://github.com/vitruv-tools/Vitruv-DSLs), as of version 4.0.0. When
+`setup.vsum.vitruv-dsls-version` is raised, compare these files with the version the checks follow and
+adapt `ReactionsChecker` and `CompilerHints`. The checks only report what is certainly wrong and leave
+everything else to the compiler, so a newer language can at worst make them miss a mistake; a failure of
+the checker itself is logged and leaves the decision to the compiler.
+
+The language is deliberately not a dependency of the service: it brings Xtext/Xbase, Guice, ANTLR 3,
+log4j-core, and Eclipse p2 wrappers, which conflict with Spring Boot's logging and dependency versions.
+Linking Xbase expressions also needs the Java classes generated from the metamodels, which exist only after
+the Maven build. Parsing with the real grammar before the build would therefore run in a separate JVM on the
+jars the warm-up build puts into the Maven repository of the image.
 
 The workspaces of `503` and `500` builds are kept in the temporary directory for debugging and deleted on a
 later startup once older than `setup.vsum.workspace-retention`.

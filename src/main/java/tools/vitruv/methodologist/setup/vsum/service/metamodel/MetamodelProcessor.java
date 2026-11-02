@@ -20,7 +20,6 @@ import org.eclipse.emf.codegen.ecore.genmodel.GenPackage;
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.EClassifier;
-import org.eclipse.emf.ecore.ENamedElement;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EStructuralFeature;
@@ -103,6 +102,7 @@ public class MetamodelProcessor {
     for (EPackage ePackage : packages.values()) {
       genModels.put(ePackage, createGenModel(ePackage, resourceSet, ecoreDirectory));
     }
+    checkGeneratedNames(packages, genModels);
     addUsedGenPackages(genModels);
 
     for (Resource resource : resourceSet.getResources()) {
@@ -213,7 +213,7 @@ public class MetamodelProcessor {
                     referencing,
                     String.format(
                         "%s references '%s', which is not part of the uploaded metamodels",
-                        elementPath(referencing), proxyUri))
+                        EcoreLocations.elementPath(referencing), proxyUri))
                 .withHint(
                     "Upload the metamodel '"
                         + proxyUri.trimFragment().lastSegment()
@@ -288,21 +288,33 @@ public class MetamodelProcessor {
 
   private void collectErrors(Diagnostic diagnostic, UploadedFile file, List<BuildProblem> errors) {
     if (diagnostic.getChildren().isEmpty()) {
-      if (diagnostic.getSeverity() >= Diagnostic.ERROR) {
-        EObject element =
-            diagnostic.getData().stream()
-                .filter(EObject.class::isInstance)
-                .map(EObject.class::cast)
-                .findFirst()
-                .orElse(null);
-        errors.add(
-            element == null
-                ? BuildProblem.of(Source.METAMODEL, file.fileName(), diagnostic.getMessage())
-                : locate(file, element, elementPath(element) + ": " + diagnostic.getMessage()));
-      }
+      EcoreDiagnostics.translate(diagnostic)
+          .ifPresent(finding -> errors.add(problem(file, finding)));
       return;
     }
     diagnostic.getChildren().forEach(child -> collectErrors(child, file, errors));
+  }
+
+  /** Rejects class names whose generated Java code does not compile. */
+  private void checkGeneratedNames(
+      Map<UploadedFile, EPackage> packages, Map<EPackage, GenModel> genModels) {
+    List<BuildProblem> errors = new ArrayList<>();
+    packages.forEach(
+        (file, ePackage) ->
+            GeneratedNames.check(genModels.get(ePackage))
+                .forEach(finding -> errors.add(problem(file, finding))));
+    throwIfAny(errors);
+  }
+
+  private static BuildProblem problem(UploadedFile file, EcoreDiagnostics.Finding finding) {
+    BuildProblem problem =
+        finding.element() == null
+            ? BuildProblem.of(Source.METAMODEL, file.fileName(), finding.message())
+            : locate(
+                file,
+                finding.element(),
+                EcoreLocations.elementPath(finding.element()) + ": " + finding.message());
+    return problem.withHint(finding.hint());
   }
 
   /** A problem of an element, located at its {@code name="..."} attribute in the upload. */
@@ -312,27 +324,9 @@ public class MetamodelProcessor {
 
   private static BuildProblem locate(
       String fileName, String text, EObject element, String message) {
-    Integer line = text == null ? null : EcoreLocations.lineOf(text, namePath(element));
+    Integer line =
+        text == null ? null : EcoreLocations.lineOf(text, EcoreLocations.namePath(element));
     return BuildProblem.at(Source.METAMODEL, fileName, text, line, null, message);
-  }
-
-  /** Names from the root package down to the element, e.g. [model, Component, name]. */
-  private static List<String> namePath(EObject element) {
-    List<String> names = new ArrayList<>();
-    for (EObject current = element; current != null; current = current.eContainer()) {
-      if (current instanceof ENamedElement named && named.getName() != null) {
-        names.add(0, named.getName());
-      }
-    }
-    return names;
-  }
-
-  /** Readable name of an element, e.g. {@code Component.name}. */
-  private static String elementPath(EObject element) {
-    List<String> names = namePath(element);
-    return names.size() > 1
-        ? String.join(".", names.subList(1, names.size()))
-        : String.join(".", names);
   }
 
   private static BuildProblem notValidEcore(UploadedFile metamodel, Exception e) {
@@ -418,7 +412,8 @@ public class MetamodelProcessor {
         ePackage.getNsURI(),
         ePackage.eResource().getURI().lastSegment(),
         genModel.eResource().getURI().lastSegment(),
-        generatedPackages);
+        generatedPackages,
+        ePackage);
   }
 
   private static URI fileUri(Path path) {
