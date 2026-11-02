@@ -15,6 +15,7 @@ import tools.vitruv.framework.views.ViewType;
 import tools.vitruv.framework.vsum.VirtualModel;
 import tools.vitruv.framework.remote.server.*;
 import java.util.Scanner;
+import java.util.concurrent.CountDownLatch;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 <#if constraintResources?has_content>
@@ -25,19 +26,37 @@ import tools.vitruv.dsls.vitruvocl.vitruv.VitruvOclConstraintChecker;
  * This class provides an example how to define and use a VSUM.
  */
 public class VSUMExample {
-  public static void main(String[] args) {
+  public static void main(String[] args) throws InterruptedException {
     try {
       VitruvServer server = new VitruvServer(VSUMExample::createDefaultVirtualModel);
       server.start();
-      Scanner scanner = new Scanner(System.in);
-      while (!scanner.nextLine().equals("quit")) {
-        
-      }
-      scanner.close();
-      server.stop();
+      CountDownLatch stopped = new CountDownLatch(1);
+      Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+        server.stop();
+        stopped.countDown();
+      }));
+      stopOnQuit();
+      stopped.await();
     } catch (IOException e) {
       System.out.println("Something went wrong " + e);
     }
+  }
+
+  /**
+   * Stops the server when "quit" is entered. Without input, e.g. in a container or as a service,
+   * the server keeps running until it is stopped with Ctrl+C or a stop signal.
+   */
+  private static void stopOnQuit() {
+    Thread reader = new Thread(() -> {
+      Scanner scanner = new Scanner(System.in);
+      while (scanner.hasNextLine()) {
+        if (scanner.nextLine().equals("quit")) {
+          System.exit(0);
+        }
+      }
+    }, "quit-reader");
+    reader.setDaemon(true);
+    reader.start();
   }
 
   private static VirtualModel createDefaultVirtualModel() {

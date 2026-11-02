@@ -97,6 +97,48 @@ class VsumBuildEndToEndTest {
     } finally {
       stop(server);
     }
+    assertThat(server.exitValue()).as("quit stops the server normally").isZero();
+  }
+
+  @Test
+  void builtVsumKeepsRunningWithoutInput() throws Exception {
+    VsumProjectBuildService buildService =
+        new VsumProjectBuildService(
+            new VsumService(new GenerateFromTemplate(), new EcoreToGenmodelService()));
+
+    byte[] jar =
+        buildService.buildProjectJar(
+            List.of(file("metamodelFiles", "model.ecore"), file("metamodelFiles", "model2.ecore")),
+            List.of(
+                file("genmodelFiles", "model.genmodel"), file("genmodelFiles", "model2.genmodel")),
+            List.of(file("reactionFiles", "templateReactions.reactions")));
+
+    Path jarFile = Files.write(runDirectory.resolve("vsum-detached.jar"), jar);
+    // like in a container or as a service: the input ends immediately
+    Path noInput = Files.createFile(runDirectory.resolve("no-input"));
+    Process server =
+        new ProcessBuilder("java", "-jar", jarFile.toString())
+            .directory(runDirectory.toFile())
+            .redirectInput(noInput.toFile())
+            .redirectErrorStream(true)
+            .redirectOutput(runDirectory.resolve("server-detached.log").toFile())
+            .start();
+    try {
+      HttpClient http = HttpClient.newHttpClient();
+      awaitHealthy(http, server);
+      Thread.sleep(2000);
+      assertThat(server.isAlive()).as("the VSUM server keeps running without input").isTrue();
+      assertThat(get(http, "/vsum/constraints")).isEqualTo("[ ]");
+      assertThat(runDirectory.resolve("server-detached.log"))
+          .as("the end of the input is no error")
+          .content()
+          .doesNotContain("Exception in thread");
+    } finally {
+      server.destroy();
+      if (!server.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)) {
+        server.destroyForcibly();
+      }
+    }
   }
 
   private static void awaitHealthy(HttpClient http, Process server) throws Exception {

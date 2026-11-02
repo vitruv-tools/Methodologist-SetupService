@@ -109,4 +109,19 @@ class GenerateFromTemplateConstraintsTest {
 
     assertFalse(Files.readString(target).contains("VitruvOcl"));
   }
+
+  @Test
+  @DisplayName("the VSUM keeps running without input and stops on a stop signal")
+  void vsumExampleRunsWithoutInput() throws Exception {
+    Path target = tempDir.resolve("VSUMExample.java");
+
+    generator.generateVsumExample(
+        target.toFile(), PACKAGE_NAME, List.of("Alpha"), List.of("mir.reactions.a.A"), List.of());
+
+    String example = Files.readString(target);
+    assertTrue(example.contains("Runtime.getRuntime().addShutdownHook("));
+    assertTrue(example.contains("while (scanner.hasNextLine())"));
+    assertTrue(example.contains("reader.setDaemon(true);"));
+    assertFalse(example.contains("while (!scanner.nextLine().equals(\"quit\"))"));
+  }
 }
