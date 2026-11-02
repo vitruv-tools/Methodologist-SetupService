@@ -181,7 +181,7 @@ class VsumProjectBuildServiceTest {
 
   /** A misspelled class is reported with a suggestion before the Maven build starts. */
   @Test
-  void rejectsMisspelledClassesBeforeTheMavenBuild() throws IOException {
+  void rejectsMisspelledClassesBeforeTheMavenBuild() {
     MavenBuildRunner mavenBuildRunner = mock(MavenBuildRunner.class);
     VsumProjectBuildService checked =
         new VsumProjectBuildService(
@@ -196,17 +196,15 @@ class VsumProjectBuildServiceTest {
         fixture("templateReactions.reactions")
             .text()
             .replace("val entity = new model2::Entity", "val entity = new model2::Entitiy");
+    VsumBuildRequest request =
+        new VsumBuildRequest(
+            List.of(fixture("model.ecore"), fixture("model2.ecore")),
+            List.of(text("my.reactions", reactions)),
+            List.of(),
+            List.of());
 
     VsumBuildException exception =
-        assertThrows(
-            VsumBuildException.class,
-            () ->
-                checked.buildProjectJar(
-                    new VsumBuildRequest(
-                        List.of(fixture("model.ecore"), fixture("model2.ecore")),
-                        List.of(text("my.reactions", reactions)),
-                        List.of(),
-                        List.of())));
+        assertThrows(VsumBuildException.class, () -> checked.buildProjectJar(request));
 
     verify(mavenBuildRunner, never()).build(any(), any());
     assertEquals(VsumErrorCodes.REACTIONS_ERROR, exception.getErrorCode());

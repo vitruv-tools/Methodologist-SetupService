@@ -35,46 +35,53 @@ import tools.vitruv.methodologist.setup.vsum.service.problem.BuildProblem;
  */
 final class ReactionsChecker {
 
-  private static final String ID = "\\^?([A-Za-z_][A-Za-z0-9_]*)";
-  private static final String NAME = "\\^?[A-Za-z_][A-Za-z0-9_]*";
-  private static final String QUALIFIED_NAME = NAME + "(?:\\s*\\.\\s*" + NAME + ")*";
+  // Quantifiers are possessive: each repetition is followed by something it cannot consume, so
+  // backtracking would never find another match, and possessive matching cannot overflow the stack.
+  private static final String NAME = "\\^?[A-Za-z_]\\w*+";
+  private static final String ID = "\\^?([A-Za-z_]\\w*+)";
+  private static final String SEPARATOR = "\\s*+::\\s*+";
+  private static final String QUALIFIED_NAME = NAME + "(?:\\s*+\\.\\s*+" + NAME + ")*+";
+  private static final String REPLACED_AT = "replaced at";
+  private static final String INSERTED_IN = "inserted in";
+  private static final Pattern ALIAS = Pattern.compile(ID);
   private static final Pattern METAMODEL_IMPORT =
       Pattern.compile(
-          "\\bimport\\s+\"([^\"]*)\"\\s+as\\s+" + ID + "(\\s+using\\s+qualified\\s+names)?");
+          "\\bimport\\s++\"([^\"]*+)\"\\s++as\\s++"
+              + ID
+              + "(\\s++using\\s++qualified\\s++names)?+");
   private static final Pattern JAVA_IMPORT_NAME =
       Pattern.compile(
-          "\\bimport\\s+(?:static\\s+(?:extension\\s+)?)?(?:" + NAME + "\\s*\\.\\s*)*" + ID);
+          "\\bimport\\s++(?:static\\s++(?:extension\\s++)?+)?+(?:"
+              + NAME
+              + "\\s*+\\.\\s*+)*+"
+              + ID);
   private static final Pattern SEGMENT_METAMODELS =
       Pattern.compile(
-          "\\b(?:in\\s+reaction\\s+to\\s+changes\\s+in|execute\\s+actions\\s+in)\\s+("
+          "\\b(?:in\\s++reaction\\s++to\\s++changes\\s++in|execute\\s++actions\\s++in)\\s++("
               + NAME
-              + "(?:\\s+and\\s+"
+              + "(?:\\s++and\\s++"
               + NAME
-              + ")*)");
+              + ")*+)");
   // a metaclass reference; the lookbehind skips qualified Java types like java.util.List::of
   private static final Pattern METACLASS =
-      Pattern.compile("(?<![\\w.$^])" + ID + "\\s*::\\s*(" + QUALIFIED_NAME + ")");
+      Pattern.compile("(?<![\\w.$^])" + ID + SEPARATOR + "(" + QUALIFIED_NAME + ")");
   // 'reaction segment::Name' and 'routine a.b::name' override other segments, they are no
   // metaclasses
   private static final Pattern OVERRIDE_BEFORE =
-      Pattern.compile("\\b(?:reaction|routine)\\s+(?:" + NAME + "\\s*\\.\\s*)*$");
-  // groups: change kind, element alias and class, change, alias and class, feature
-  private static final Pattern TRIGGER =
+      Pattern.compile("\\b(?:reaction|routine)\\s++(?:" + NAME + "\\s*+\\.\\s*+)*+$");
+  // a trigger is matched in parts: after element|attribute [alias::Class] change alias::Class[f]
+  private static final Pattern TRIGGER_START =
+      Pattern.compile("\\bafter\\s++(element|attribute)\\b");
+  private static final Pattern TRIGGER_ELEMENT =
+      Pattern.compile("\\s++" + ID + SEPARATOR + "(" + QUALIFIED_NAME + ")");
+  private static final Pattern TRIGGER_CHANGE =
+      Pattern.compile("\\s++(inserted\\s++in|removed\\s++from|replaced\\s++at)\\b");
+  private static final Pattern TRIGGER_FEATURE =
       Pattern.compile(
-          "\\bafter\\s+(element|attribute)(?:\\s+"
-              + ID
-              + "\\s*::\\s*("
-              + QUALIFIED_NAME
-              + "))?\\s+(inserted\\s+in|removed\\s+from|replaced\\s+at)\\s+"
-              + ID
-              + "\\s*::\\s*("
-              + QUALIFIED_NAME
-              + ")\\s*\\[\\s*"
-              + ID
-              + "\\s*\\]");
+          "\\s++" + ID + SEPARATOR + "(" + QUALIFIED_NAME + ")\\s*+\\[\\s*+" + ID + "\\s*+\\]");
   // 'new' with '::' only occurs in create blocks; Xbase constructor calls use Java types
   private static final Pattern CREATE =
-      Pattern.compile("\\bnew\\s+" + ID + "\\s*::\\s*(" + QUALIFIED_NAME + ")");
+      Pattern.compile("\\bnew\\s++" + ID + SEPARATOR + "(" + QUALIFIED_NAME + ")");
 
   private final UploadedFile file;
   private final String code;
@@ -84,6 +91,30 @@ final class ReactionsChecker {
   private final List<BuildProblem> problems = new ArrayList<>();
 
   private record Alias(String name, EPackage ePackage, boolean qualifiedNames) {}
+
+  /**
+   * A trigger on a feature, e.g. {@code after element a::X inserted in a::Y[f]}.
+   *
+   * @param attributeChange whether it is an {@code after attribute} trigger
+   * @param elementAlias alias of the element type, or {@code null} if there is none
+   * @param elementName name of the element type, or {@code null}
+   * @param elementOffset offset of the element type name, or -1
+   * @param change the change with single spaces, e.g. "inserted in"
+   * @param alias alias of the class holding the feature
+   * @param className name of the class holding the feature
+   * @param feature the feature name
+   * @param featureOffset offset of the feature name
+   */
+  private record Trigger(
+      boolean attributeChange,
+      String elementAlias,
+      String elementName,
+      int elementOffset,
+      String change,
+      String alias,
+      String className,
+      String feature,
+      int featureOffset) {}
 
   private ReactionsChecker(UploadedFile file, Collection<EPackage> allPackages) {
     this.file = file;
@@ -155,7 +186,7 @@ final class ReactionsChecker {
   private void checkSegmentMetamodels() {
     Matcher lists = SEGMENT_METAMODELS.matcher(code);
     while (lists.find()) {
-      Matcher names = Pattern.compile(ID).matcher(lists.group(1));
+      Matcher names = ALIAS.matcher(lists.group(1));
       while (names.find()) {
         String name = names.group(1);
         if (!name.equals("and") && !aliases.containsKey(name)) {
@@ -168,94 +199,136 @@ final class ReactionsChecker {
   private void checkMetaclasses() {
     Matcher references = METACLASS.matcher(code);
     while (references.find()) {
-      String aliasName = references.group(1);
-      if (OVERRIDE_BEFORE
-          .matcher(code.substring(Math.max(0, references.start() - 200), references.start()))
-          .find()) {
-        continue;
+      if (!isOverride(references.start())) {
+        checkMetaclass(
+            references.group(1), references.start(1), references.group(2), references.start(2));
       }
-      Alias alias = aliases.get(aliasName);
-      if (alias == null) {
-        // 'Type::member' is static member access in Xbase; aliases are lower case by convention
-        if (Character.isLowerCase(aliasName.charAt(0)) && !javaTypes.contains(aliasName)) {
-          unknownAlias(aliasName, references.start(1));
-        }
-        continue;
-      }
-      resolve(alias, references.group(2), references.start(2));
+    }
+  }
+
+  private boolean isOverride(int offset) {
+    return OVERRIDE_BEFORE.matcher(code.substring(Math.max(0, offset - 200), offset)).find();
+  }
+
+  private void checkMetaclass(String aliasName, int aliasOffset, String name, int nameOffset) {
+    Alias alias = aliases.get(aliasName);
+    if (alias != null) {
+      resolve(alias, name, nameOffset);
+    } else if (Character.isLowerCase(aliasName.charAt(0)) && !javaTypes.contains(aliasName)) {
+      // 'Type::member' is static member access in Xbase; aliases are lower case by convention
+      unknownAlias(aliasName, aliasOffset);
     }
   }
 
   private void checkTriggers() {
-    Matcher triggers = TRIGGER.matcher(code);
-    while (triggers.find()) {
-      boolean attributeChange = triggers.group(1).equals("attribute");
-      String change = triggers.group(4).replaceAll("\\s+", " ");
-      EClassifier elementType = resolveQuietly(triggers.group(2), triggers.group(3));
-      EClassifier owner = resolveQuietly(triggers.group(5), triggers.group(6));
-      if (!(owner instanceof EClass ownerClass)) {
-        continue; // unresolved classes are reported by checkMetaclasses
-      }
-      String featureName = triggers.group(7);
-      int offset = triggers.start(7);
-      EStructuralFeature feature = ownerClass.getEStructuralFeature(featureName);
-      if (feature == null) {
-        List<EStructuralFeature> candidates =
-            ownerClass.getEAllStructuralFeatures().stream()
-                .filter(f -> attributeChange == f instanceof EAttribute)
-                .toList();
-        add(
-            offset,
-            String.format(
-                "'%s' has no %s '%s'",
-                ownerClass.getName(), attributeChange ? "attribute" : "reference", featureName),
-            suggestion(
-                featureName,
-                candidates.stream().map(ENamedElement::getName).toList(),
-                attributeChange ? "attributes" : "references"));
-      } else if (attributeChange && feature instanceof EReference) {
-        add(
-            offset,
-            String.format("'%s.%s' is a reference, not an attribute", owner.getName(), featureName),
-            String.format(
-                "Use 'after element %s %s[%s]'",
-                feature.isMany()
-                    ? (change.equals("replaced at") ? "inserted in" : change)
-                    : "replaced at",
-                qualified(owner),
-                featureName));
-      } else if (!attributeChange && feature instanceof EAttribute) {
-        add(
-            offset,
-            String.format("'%s.%s' is an attribute, not a reference", owner.getName(), featureName),
-            String.format(
-                "Use 'after attribute %s %s[%s]'", change, qualified(owner), featureName));
-      } else if (!attributeChange) {
-        checkElementChange(change, (EReference) feature, elementType, offset, triggers.start(3));
+    Matcher starts = TRIGGER_START.matcher(code);
+    while (starts.find()) {
+      Trigger trigger = trigger(starts);
+      if (trigger != null) {
+        checkTrigger(trigger);
       }
     }
   }
 
-  private void checkElementChange(
-      String change, EReference reference, EClassifier elementType, int offset, int typeOffset) {
-    String name = reference.getEContainingClass().getName() + "." + reference.getName();
-    if (change.equals("replaced at") && reference.isMany()) {
+  /** Reads the trigger after {@code after element|attribute}, or {@code null} if it has none. */
+  private Trigger trigger(Matcher start) {
+    Matcher element = TRIGGER_ELEMENT.matcher(code).region(start.end(), code.length());
+    boolean typed = element.lookingAt();
+    Matcher change =
+        TRIGGER_CHANGE.matcher(code).region(typed ? element.end() : start.end(), code.length());
+    if (!change.lookingAt()) {
+      return null;
+    }
+    Matcher feature = TRIGGER_FEATURE.matcher(code).region(change.end(), code.length());
+    if (!feature.lookingAt()) {
+      return null;
+    }
+    return new Trigger(
+        start.group(1).equals("attribute"),
+        typed ? element.group(1) : null,
+        typed ? element.group(2) : null,
+        typed ? element.start(2) : -1,
+        change.group(1).replaceAll("\\s++", " "),
+        feature.group(1),
+        feature.group(2),
+        feature.group(3),
+        feature.start(3));
+  }
+
+  private void checkTrigger(Trigger trigger) {
+    if (!(resolveQuietly(trigger.alias(), trigger.className()) instanceof EClass owner)) {
+      return; // unresolved classes are reported by checkMetaclasses
+    }
+    EStructuralFeature feature = owner.getEStructuralFeature(trigger.feature());
+    if (feature == null) {
+      reportMissingFeature(trigger, owner);
+    } else if (trigger.attributeChange() != feature instanceof EAttribute) {
+      reportWrongFeatureKind(trigger, owner, feature);
+    } else if (feature instanceof EReference reference) {
+      checkElementChange(trigger, reference);
+    }
+  }
+
+  private void reportMissingFeature(Trigger trigger, EClass owner) {
+    String kind = trigger.attributeChange() ? "attribute" : "reference";
+    List<String> candidates =
+        owner.getEAllStructuralFeatures().stream()
+            .filter(feature -> trigger.attributeChange() == feature instanceof EAttribute)
+            .map(ENamedElement::getName)
+            .toList();
+    add(
+        trigger.featureOffset(),
+        String.format("'%s' has no %s '%s'", owner.getName(), kind, trigger.feature()),
+        suggestion(trigger.feature(), candidates, kind + "s"));
+  }
+
+  private void reportWrongFeatureKind(Trigger trigger, EClass owner, EStructuralFeature feature) {
+    String name = owner.getName() + "." + trigger.feature();
+    if (feature instanceof EReference) {
       add(
-          offset,
+          trigger.featureOffset(),
+          String.format("'%s' is a reference, not an attribute", name),
+          String.format(
+              "Use 'after element %s %s[%s]'",
+              elementChangeFor(trigger.change(), feature), qualified(owner), trigger.feature()));
+    } else {
+      add(
+          trigger.featureOffset(),
+          String.format("'%s' is an attribute, not a reference", name),
+          String.format(
+              "Use 'after attribute %s %s[%s]'",
+              trigger.change(), qualified(owner), trigger.feature()));
+    }
+  }
+
+  /** The element change that fits the multiplicity of a reference. */
+  private static String elementChangeFor(String change, EStructuralFeature reference) {
+    if (!reference.isMany()) {
+      return REPLACED_AT;
+    }
+    return REPLACED_AT.equals(change) ? INSERTED_IN : change;
+  }
+
+  private void checkElementChange(Trigger trigger, EReference reference) {
+    String name = reference.getEContainingClass().getName() + "." + reference.getName();
+    boolean replaced = REPLACED_AT.equals(trigger.change());
+    EClassifier elementType = resolveQuietly(trigger.elementAlias(), trigger.elementName());
+    if (replaced && reference.isMany()) {
+      add(
+          trigger.featureOffset(),
           String.format("'%s' is many-valued, so its elements are not replaced", name),
           "Use 'inserted in' and 'removed from' for many-valued references");
-    } else if (!change.equals("replaced at") && !reference.isMany()) {
+    } else if (!replaced && !reference.isMany()) {
       add(
-          offset,
+          trigger.featureOffset(),
           String.format(
-              "'%s' is single-valued, so elements cannot be %s it",
-              name, change.equals("inserted in") ? "inserted in" : "removed from"),
+              "'%s' is single-valued, so elements cannot be %s it", name, trigger.change()),
           "Use 'replaced at' for single-valued references");
     } else if (elementType instanceof EClass elementClass
         && reference.getEReferenceType() != null
         && !related(elementClass, reference.getEReferenceType())) {
       add(
-          typeOffset,
+          trigger.elementOffset(),
           String.format(
               "elements of type '%s' cannot be contained in '%s', which holds '%s'",
               elementClass.getName(), name, reference.getEReferenceType().getName()),
@@ -359,13 +432,16 @@ final class ReactionsChecker {
       }
     }
     for (EPackage subpackage : ePackage.getESubpackages()) {
-      collect(
-          subpackage,
-          qualifier == null
-              ? null
-              : qualifier.isEmpty() ? subpackage.getName() : qualifier + "." + subpackage.getName(),
-          into);
+      collect(subpackage, childQualifier(qualifier, subpackage), into);
     }
+  }
+
+  /** The qualifier of a subpackage's classifiers, or {@code null} without qualified names. */
+  private static String childQualifier(String qualifier, EPackage subpackage) {
+    if (qualifier == null) {
+      return null;
+    }
+    return qualifier.isEmpty() ? subpackage.getName() : qualifier + "." + subpackage.getName();
   }
 
   /** Qualified names skip the root package, e.g. {@code sub.Class} for the root's subpackage. */

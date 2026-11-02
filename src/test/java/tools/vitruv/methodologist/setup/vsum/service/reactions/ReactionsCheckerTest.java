@@ -1,5 +1,6 @@
 package tools.vitruv.methodologist.setup.vsum.service.reactions;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static tools.vitruv.methodologist.setup.vsum.service.TestFiles.fixture;
@@ -45,8 +46,10 @@ class ReactionsCheckerTest {
   }
 
   @Test
-  void acceptsTheTemplateReactions() throws IOException {
-    processor.process(List.of(fixture("templateReactions.reactions")), metamodels, projectRoot);
+  void acceptsTheTemplateReactions() {
+    List<UploadedFile> reactions = List.of(fixture("templateReactions.reactions"));
+
+    assertDoesNotThrow(() -> processor.process(reactions, metamodels, projectRoot));
   }
 
   @Test
@@ -203,7 +206,7 @@ class ReactionsCheckerTest {
   }
 
   @Test
-  void leavesXbaseCodeOverridesStringsAndCommentsAlone() throws IOException {
+  void leavesXbaseCodeOverridesStringsAndCommentsAlone() {
     UploadedFile reactions =
         text(
             "valid.reactions",
@@ -228,7 +231,9 @@ class ReactionsCheckerTest {
                 execute actions in model2
                 """);
 
-    processor.process(List.of(reactions), metamodels, projectRoot);
+    List<UploadedFile> uploads = List.of(reactions);
+
+    assertDoesNotThrow(() -> processor.process(uploads, metamodels, projectRoot));
   }
 
   @Test
@@ -268,10 +273,11 @@ class ReactionsCheckerTest {
             reaction D { after element q::Deep created call {} }
             """);
 
+    List<UploadedFile> uploads = List.of(reactions);
+
     VsumBuildException exception =
         assertThrows(
-            VsumBuildException.class,
-            () -> processor.process(List.of(reactions), nested, projectRoot));
+            VsumBuildException.class, () -> processor.process(uploads, nested, projectRoot));
 
     assertEquals(1, exception.getProblems().size());
     BuildProblem problem = exception.getProblems().get(0);
@@ -280,12 +286,10 @@ class ReactionsCheckerTest {
   }
 
   private BuildProblem single(String reactions) {
+    List<UploadedFile> uploads = List.of(text("checked.reactions", reactions));
     VsumBuildException exception =
         assertThrows(
-            VsumBuildException.class,
-            () ->
-                processor.process(
-                    List.of(text("checked.reactions", reactions)), metamodels, projectRoot));
+            VsumBuildException.class, () -> processor.process(uploads, metamodels, projectRoot));
     assertEquals(1, exception.getProblems().size(), exception.getMessage());
     return exception.getProblems().get(0);
   }

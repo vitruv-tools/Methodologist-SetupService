@@ -1,15 +1,16 @@
 package tools.vitruv.methodologist.setup.vsum.service.metamodel;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static tools.vitruv.methodologist.setup.vsum.service.TestFiles.text;
 
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import tools.vitruv.methodologist.setup.vsum.service.UploadedFile;
 import tools.vitruv.methodologist.setup.vsum.service.problem.BuildProblem;
 import tools.vitruv.methodologist.setup.vsum.service.problem.VsumBuildException;
 
@@ -139,8 +140,8 @@ class MetamodelChecksTest {
   }
 
   @Test
-  void acceptsNamesThatEmfEscapes() throws IOException {
-    processor.process(
+  void acceptsNamesThatEmfEscapes() {
+    List<UploadedFile> uploads =
         List.of(
             ecore(
                 """
@@ -155,19 +156,18 @@ class MetamodelChecksTest {
                   <eClassifiers xsi:type="ecore:EClass" name="Inner"/>
                 </eSubpackages>
                 """
-                    .formatted(STRING))),
-        projectRoot);
+                    .formatted(STRING)));
+
+    assertDoesNotThrow(() -> processor.process(uploads, projectRoot));
   }
 
   private List<BuildProblem> problems(String classifiers) {
-    return assertThrows(
-            VsumBuildException.class,
-            () -> processor.process(List.of(ecore(classifiers)), projectRoot))
+    List<UploadedFile> uploads = List.of(ecore(classifiers));
+    return assertThrows(VsumBuildException.class, () -> processor.process(uploads, projectRoot))
         .getProblems();
   }
 
-  private static tools.vitruv.methodologist.setup.vsum.service.UploadedFile ecore(
-      String classifiers) {
+  private static UploadedFile ecore(String classifiers) {
     return text(
         "probe.ecore",
         """
