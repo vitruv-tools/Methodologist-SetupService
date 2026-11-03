@@ -39,9 +39,10 @@ public final class GenModels {
         "/" + ProjectLayout.MODEL_ARTIFACT_ID + "/" + ProjectLayout.GENERATED_ECORE_SOURCES);
     genModel.setImporterID("org.eclipse.emf.importer.ecore");
     genModel.setRootExtendsClass("org.eclipse.emf.ecore.impl.MinimalEObjectImpl$Container");
-    // must be set explicitly, otherwise e.g. operation reflection is disabled; the build's EMF
-    // code generator is newer and understands this version
-    genModel.setRuntimeVersion(GenRuntimeVersion.EMF235);
+    // must be set explicitly, otherwise e.g. operation reflection is disabled. The genmodels are
+    // also read by the platform backend's metamodel builder, whose EMF (2.33) rejects newer runtime
+    // versions, so this is the newest version every reader understands.
+    genModel.setRuntimeVersion(GenRuntimeVersion.EMF233);
     genModel.setOperationReflection(true);
     genModel.setImportOrganizing(true);
     genModel.setCodeFormatting(true);
