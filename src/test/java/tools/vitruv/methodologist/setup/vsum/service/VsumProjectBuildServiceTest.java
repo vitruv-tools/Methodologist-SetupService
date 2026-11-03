@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static tools.vitruv.methodologist.setup.vsum.service.TestFiles.fixture;
 import static tools.vitruv.methodologist.setup.vsum.service.TestFiles.text;
 
@@ -177,9 +179,44 @@ class VsumProjectBuildServiceTest {
     assertFalse(main.contains("import tools.vitruv.dsls.vitruvocl"), main);
   }
 
+  /** A misspelled class is reported with a suggestion before the Maven build starts. */
+  @Test
+  void rejectsMisspelledClassesBeforeTheMavenBuild() {
+    MavenBuildRunner mavenBuildRunner = mock(MavenBuildRunner.class);
+    VsumProjectBuildService checked =
+        new VsumProjectBuildService(
+            new MetamodelProcessor(),
+            new ReactionsProcessor(),
+            new ConstraintsProcessor(),
+            new NeoJoinViewDefinitionProcessor(),
+            new ProjectGenerator(properties),
+            mavenBuildRunner,
+            properties);
+    String reactions =
+        fixture("templateReactions.reactions")
+            .text()
+            .replace("val entity = new model2::Entity", "val entity = new model2::Entitiy");
+    VsumBuildRequest request =
+        new VsumBuildRequest(
+            List.of(fixture("model.ecore"), fixture("model2.ecore")),
+            List.of(text("my.reactions", reactions)),
+            List.of(),
+            List.of());
+
+    VsumBuildException exception =
+        assertThrows(VsumBuildException.class, () -> checked.buildProjectJar(request));
+
+    verify(mavenBuildRunner, never()).build(any(), any());
+    assertEquals(VsumErrorCodes.REACTIONS_ERROR, exception.getErrorCode());
+    BuildProblem problem = exception.getProblems().get(0);
+    assertEquals("my.reactions", problem.file());
+    assertEquals(lineContaining(reactions, "model2::Entitiy"), problem.line());
+    assertEquals("Did you mean 'Entity'?", problem.hint());
+  }
+
   /**
-   * A typo in a class name is reported at its line in the upload, as one problem. Runs the real
-   * Maven build.
+   * An error only the Reactions compiler finds, a misspelled feature in Xbase code, is reported at
+   * its line in the upload, as one problem with a hint. Runs the real Maven build.
    */
   @Test
   @EnabledIfSystemProperty(named = "vsum.integration", matches = "true")
@@ -187,7 +224,8 @@ class VsumProjectBuildServiceTest {
     String reactions =
         fixture("templateReactions.reactions")
             .text()
-            .replace("val entity = new model2::Entity", "val entity = new model2::Entitiy");
+            .replaceFirst("entity\\.name = component\\.name", "entity.nme = component.name");
+
     VsumBuildException exception =
         assertThrows(
             VsumBuildException.class,
@@ -204,10 +242,10 @@ class VsumProjectBuildServiceTest {
     BuildProblem problem = exception.getProblems().get(0);
     assertEquals(Source.REACTIONS, problem.source());
     assertEquals("my.reactions", problem.file());
-    assertEquals(
-        lineContaining(reactions, "model2::Entitiy"), problem.line(), exception.getMessage());
-    assertTrue(problem.message().contains("Entitiy"), problem.message());
-    assertTrue(problem.excerpt().contains("new model2::Entitiy"), problem.excerpt());
+    assertEquals(lineContaining(reactions, "entity.nme"), problem.line(), exception.getMessage());
+    assertTrue(problem.message().contains("nme"), problem.message());
+    assertTrue(problem.excerpt().contains("entity.nme"), problem.excerpt());
+    assertTrue(problem.hint() != null && problem.hint().contains("nme"), exception.getMessage());
   }
 
   /**

@@ -104,13 +104,10 @@ public final class BuildOutputParser {
       return BuildProblem.of(Source.REACTIONS, null, message);
     }
     SourceFile source = file.get();
+    int uploadedLine = source.uploadedLine(line);
     return BuildProblem.at(
-        source.source(),
-        source.fileName(),
-        source.text(),
-        source.uploadedLine(line),
-        column,
-        message);
+            source.source(), source.fileName(), source.text(), uploadedLine, column, message)
+        .withHint(CompilerHints.forMessage(message, Excerpts.line(source.text(), uploadedLine)));
   }
 
   /** Lines following a javac error that belong to it, e.g. "symbol: ..." and "location: ...". */

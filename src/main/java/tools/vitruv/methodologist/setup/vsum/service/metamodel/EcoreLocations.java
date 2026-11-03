@@ -1,8 +1,11 @@
 package tools.vitruv.methodologist.setup.vsum.service.metamodel;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.eclipse.emf.ecore.ENamedElement;
+import org.eclipse.emf.ecore.EObject;
 import tools.vitruv.methodologist.setup.vsum.service.problem.Excerpts;
 
 /**
@@ -36,5 +39,34 @@ public final class EcoreLocations {
       line = Excerpts.lineOf(text, matcher.start());
     }
     return line;
+  }
+
+  /**
+   * Names from the root package down to the element.
+   *
+   * @param element an element of a metamodel
+   * @return e.g. {@code [model, Component, name]}
+   */
+  public static List<String> namePath(EObject element) {
+    List<String> names = new ArrayList<>();
+    for (EObject current = element; current != null; current = current.eContainer()) {
+      if (current instanceof ENamedElement named && named.getName() != null) {
+        names.add(0, named.getName());
+      }
+    }
+    return names;
+  }
+
+  /**
+   * Readable name of an element within its metamodel.
+   *
+   * @param element an element of a metamodel
+   * @return e.g. {@code Component.name}; the package name only for the root package
+   */
+  public static String elementPath(EObject element) {
+    List<String> names = namePath(element);
+    return names.size() > 1
+        ? String.join(".", names.subList(1, names.size()))
+        : String.join(".", names);
   }
 }
