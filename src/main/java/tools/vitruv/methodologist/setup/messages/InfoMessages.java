@@ -5,8 +5,6 @@ public final class InfoMessages {
 
   public static final String GENMODEL_INSPECTION_SUCCESS =
       "GenModel inspected successfully, showing planned changes";
-  public static final String GENMODEL_PROCESS_SUCCESS =
-      "GenModel processed and changes applied successfully";
   public static final String ATTRIBUTES_REMOVED = "Removed attributes: %s";
   public static final String ATTRIBUTES_WOULD_REMOVE = "Would remove attributes: %s";
   public static final String BASE_PACKAGE_SET = "Set basePackage for genPackage %s to '%s'.";
@@ -26,8 +24,6 @@ public final class InfoMessages {
   public static final String FOREIGN_MODEL_ADDED = "Added missing foreignModel entry: %s";
   public static final String FOREIGN_MODEL_WOULD_ADD = "Would add missing foreignModel entry: %s";
   public static final String UNNAMED_PACKAGE = "<unnamed GenPackage>";
-  public static final String EMF_CLASSES_INIT_SUCCESS =
-      "Initialized {} EMF packages from classes directory";
   public static final String GENMODEL_GENERATION_SUCCESS =
       "GenModel generated successfully from ecore file";
 

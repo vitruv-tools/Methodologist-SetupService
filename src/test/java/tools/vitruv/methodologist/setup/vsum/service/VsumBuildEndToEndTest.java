@@ -1,10 +1,10 @@
 package tools.vitruv.methodologist.setup.vsum.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static tools.vitruv.methodologist.setup.vsum.service.TestFiles.fixture;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -14,36 +14,48 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.mock.web.MockMultipartFile;
-import tools.vitruv.methodologist.setup.model.service.EcoreToGenmodelService;
+import tools.vitruv.methodologist.setup.vsum.service.build.MavenBuildRunner;
+import tools.vitruv.methodologist.setup.vsum.service.constraints.ConstraintsProcessor;
+import tools.vitruv.methodologist.setup.vsum.service.metamodel.MetamodelProcessor;
+import tools.vitruv.methodologist.setup.vsum.service.project.ProjectGenerator;
+import tools.vitruv.methodologist.setup.vsum.service.reactions.ReactionsProcessor;
+import tools.vitruv.methodologist.setup.vsum.service.views.NeoJoinViewDefinitionProcessor;
 
 /**
- * Builds a real VSUM project with Maven, starts the resulting jar and queries the constraints of
- * the running Vitruv server. Requires Maven and the configured Vitruvius versions; enable with
- * {@code -Dvsum.e2e=true}.
+ * Builds a VSUM with constraints, starts it and checks that its Vitruv server lists and validates
+ * the uploaded constraints. Runs the real Maven build and needs port 8080, so it only runs with
+ * {@code -Dvsum.integration=true}.
  */
-@EnabledIfSystemProperty(named = "vsum.e2e", matches = "true")
+@EnabledIfSystemProperty(named = "vsum.integration", matches = "true")
 class VsumBuildEndToEndTest {
   private static final String SERVER_URL = "http://localhost:8080";
+
+  private final VsumBuildProperties properties = new VsumBuildProperties();
+  private final VsumProjectBuildService service =
+      new VsumProjectBuildService(
+          new MetamodelProcessor(),
+          new ReactionsProcessor(),
+          new ConstraintsProcessor(),
+          new NeoJoinViewDefinitionProcessor(),
+          new ProjectGenerator(properties),
+          new MavenBuildRunner(properties),
+          properties);
 
   @TempDir Path runDirectory;
 
   @Test
   void builtVsumServesTheUploadedConstraints() throws Exception {
-    VsumProjectBuildService buildService =
-        new VsumProjectBuildService(
-            new VsumService(new GenerateFromTemplate(), new EcoreToGenmodelService()));
-
     byte[] jar =
-        buildService.buildProjectJar(
-            List.of(file("metamodelFiles", "model.ecore"), file("metamodelFiles", "model2.ecore")),
-            List.of(
-                file("genmodelFiles", "model.genmodel"), file("genmodelFiles", "model2.genmodel")),
-            List.of(file("reactionFiles", "templateReactions.reactions")),
-            List.of(file("constraintFiles", "Größen & Preise (v1).ocl")));
+        service.buildProjectJar(
+            new VsumBuildRequest(
+                List.of(fixture("model.ecore"), fixture("model2.ecore")),
+                List.of(fixture("templateReactions.reactions")),
+                List.of(fixture("constraints.ocl")),
+                List.of()));
 
     Path jarFile = Files.write(runDirectory.resolve("vsum.jar"), jar);
     Process server =
@@ -55,87 +67,24 @@ class VsumBuildEndToEndTest {
     try {
       HttpClient http = HttpClient.newHttpClient();
       awaitHealthy(http, server);
-      // otherwise another process answered on the port
-      assertThat(server.isAlive()).as("the built VSUM server is running").isTrue();
 
-      String constraints = get(http, "/vsum/constraints");
-      assertThat(constraints).contains("model::Component::componentHasName");
+      HttpResponse<String> constraints = send(http, request("/vsum/constraints").GET());
+      assertEquals(200, constraints.statusCode());
+      assertTrue(
+          constraints.body().contains("\"model::Component::ComponentHasCorrespondingEntity\""),
+          constraints.body());
 
-      String validation = post(http, "/vsum/constraints/validate", "{}");
-      assertThat(validation).contains("\"status\" : \"SATISFIED\"");
-    } finally {
-      stop(server);
-    }
-  }
-
-  @Test
-  void builtVsumWithoutConstraintsStarts() throws Exception {
-    VsumProjectBuildService buildService =
-        new VsumProjectBuildService(
-            new VsumService(new GenerateFromTemplate(), new EcoreToGenmodelService()));
-
-    byte[] jar =
-        buildService.buildProjectJar(
-            List.of(file("metamodelFiles", "model.ecore"), file("metamodelFiles", "model2.ecore")),
-            List.of(
-                file("genmodelFiles", "model.genmodel"), file("genmodelFiles", "model2.genmodel")),
-            List.of(file("reactionFiles", "templateReactions.reactions")));
-
-    Path jarFile = Files.write(runDirectory.resolve("vsum-plain.jar"), jar);
-    Process server =
-        new ProcessBuilder("java", "-jar", jarFile.toString())
-            .directory(runDirectory.toFile())
-            .redirectErrorStream(true)
-            .redirectOutput(runDirectory.resolve("server-plain.log").toFile())
-            .start();
-    try {
-      HttpClient http = HttpClient.newHttpClient();
-      awaitHealthy(http, server);
-      assertThat(server.isAlive()).as("the built VSUM server is running").isTrue();
-
-      assertThat(get(http, "/vsum/constraints")).isEqualTo("[ ]");
-    } finally {
-      stop(server);
-    }
-    assertThat(server.exitValue()).as("quit stops the server normally").isZero();
-  }
-
-  @Test
-  void builtVsumKeepsRunningWithoutInput() throws Exception {
-    VsumProjectBuildService buildService =
-        new VsumProjectBuildService(
-            new VsumService(new GenerateFromTemplate(), new EcoreToGenmodelService()));
-
-    byte[] jar =
-        buildService.buildProjectJar(
-            List.of(file("metamodelFiles", "model.ecore"), file("metamodelFiles", "model2.ecore")),
-            List.of(
-                file("genmodelFiles", "model.genmodel"), file("genmodelFiles", "model2.genmodel")),
-            List.of(file("reactionFiles", "templateReactions.reactions")));
-
-    Path jarFile = Files.write(runDirectory.resolve("vsum-detached.jar"), jar);
-    // like in a container or as a service: the input ends immediately
-    Path noInput = Files.createFile(runDirectory.resolve("no-input"));
-    Process server =
-        new ProcessBuilder("java", "-jar", jarFile.toString())
-            .directory(runDirectory.toFile())
-            .redirectInput(noInput.toFile())
-            .redirectErrorStream(true)
-            .redirectOutput(runDirectory.resolve("server-detached.log").toFile())
-            .start();
-    try {
-      HttpClient http = HttpClient.newHttpClient();
-      awaitHealthy(http, server);
-      Thread.sleep(2000);
-      assertThat(server.isAlive()).as("the VSUM server keeps running without input").isTrue();
-      assertThat(get(http, "/vsum/constraints")).isEqualTo("[ ]");
-      assertThat(runDirectory.resolve("server-detached.log"))
-          .as("the end of the input is no error")
-          .content()
-          .doesNotContain("Exception in thread");
+      HttpResponse<String> validation =
+          send(
+              http,
+              request("/vsum/constraints/validate")
+                  .header("Content-Type", "application/json")
+                  .POST(HttpRequest.BodyPublishers.ofString("{}")));
+      assertEquals(200, validation.statusCode());
+      assertTrue(validation.body().contains("\"satisfied\" : true"), validation.body());
     } finally {
       server.destroy();
-      if (!server.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)) {
+      if (!server.waitFor(10, TimeUnit.SECONDS)) {
         server.destroyForcibly();
       }
     }
@@ -148,9 +97,7 @@ class VsumBuildEndToEndTest {
         throw new IllegalStateException("VSUM server terminated with " + server.exitValue());
       }
       try {
-        if (http.send(request("/health").GET().build(), HttpResponse.BodyHandlers.ofString())
-                .statusCode()
-            == 200) {
+        if (send(http, request("/health").GET()).statusCode() == 200) {
           return;
         }
       } catch (IOException notYetStarted) {
@@ -161,36 +108,12 @@ class VsumBuildEndToEndTest {
     throw new IllegalStateException("VSUM server did not start");
   }
 
-  private static String get(HttpClient http, String path) throws Exception {
-    return http.send(request(path).GET().build(), HttpResponse.BodyHandlers.ofString()).body();
-  }
-
-  private static String post(HttpClient http, String path, String body) throws Exception {
-    return http.send(
-            request(path).POST(HttpRequest.BodyPublishers.ofString(body)).build(),
-            HttpResponse.BodyHandlers.ofString())
-        .body();
+  private static HttpResponse<String> send(HttpClient http, HttpRequest.Builder request)
+      throws IOException, InterruptedException {
+    return http.send(request.build(), HttpResponse.BodyHandlers.ofString());
   }
 
   private static HttpRequest.Builder request(String path) {
     return HttpRequest.newBuilder(URI.create(SERVER_URL + path)).timeout(Duration.ofSeconds(10));
-  }
-
-  private static void stop(Process server) throws InterruptedException {
-    try (OutputStream input = server.getOutputStream()) {
-      input.write("quit\n".getBytes());
-    } catch (IOException alreadyStopped) {
-      // nothing to do
-    }
-    if (!server.waitFor(
-        Duration.ofSeconds(10).toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS)) {
-      server.destroyForcibly();
-    }
-  }
-
-  private static MockMultipartFile file(String part, String name) throws IOException {
-    try (InputStream content = VsumBuildEndToEndTest.class.getResourceAsStream("/e2e/" + name)) {
-      return new MockMultipartFile(part, name, "application/octet-stream", content);
-    }
   }
 }

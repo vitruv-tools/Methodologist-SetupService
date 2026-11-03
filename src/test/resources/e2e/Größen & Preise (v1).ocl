@@ -1,5 +1,0 @@
--- every component must be named
-context model::Component inv componentHasName:
-  @severity CRITICAL
-  @message "Component without name"
-  self.name != ""

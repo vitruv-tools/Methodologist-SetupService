@@ -1,18 +1,15 @@
 # Methodologist Setup Service
 
 A Spring Boot REST API service for the Vitruv methodologist workflow. It validates and standardizes
-GenModel files for MWE2 compatibility, and generates ready-to-build VSUM projects from uploaded
-metamodel, genmodel, reaction, and OCL constraint files.
+GenModel files for MWE2 compatibility, and builds VSUMs from uploaded metamodels, reactions,
+constraints, and view definitions.
 
 ## Features
 
 - **GenModel Validation**: Inspect GenModel files for compliance issues without modifying them
 - **GenModel Processing**: Apply standardization rules and download the corrected file
-- **VSUM Project Generation**: Build a complete VSUM project from metamodels, genmodels, and
-  reactions, returned as a zip archive
-- **VSUM Jar Build**: Build the project and return only the executable jar-with-dependencies
-- **OCL Constraints**: Build VitruvOCL constraint files into the VSUM, where its Vitruv server
-  lists, validates, and manages them via REST
+- **VSUM Build**: Generate genmodels and a Methodologist-Template project from metamodels, reactions,
+  and VitruvOCL constraints, build and smoke-test it, and return the project zip or executable jar
 - **OpenAPI / Swagger UI**: Interactive API documentation
 - **Error Handling**: Centralized exception handling with structured error responses
 - **Docker Support**: Dockerfile and Compose setup included
@@ -34,21 +31,30 @@ metamodel, genmodel, reaction, and OCL constraint files.
 ### Run Locally
 
 ```bash
-java -jar target/methodologist-setup-service-0.0.1-SNAPSHOT.jar
+java -jar target/methodologist-setup-service-1.0.1.jar
 ```
 
 The service starts on `http://localhost:8090`.
 
 ### Run with Docker
 
-The `Dockerfile` copies the jar from the build context root, and `target/` is excluded via
-`.dockerignore`, so the jar must be staged first:
-
 ```bash
-./mvnw clean package
-cp target/methodologist-setup-service-0.0.1-SNAPSHOT.jar .
 docker compose up --build
 ```
+
+The image builds the service itself and then builds a sample VSUM project once, which fills the image's
+Maven repository (`/opt/vsum-m2`) with every dependency of the generated projects. In the container, VSUM
+builds run offline: they do not depend on Maven Central, and the first build after a deployment is as fast
+as the others. Building the image needs network access.
+
+To change the Vitruvius, VitruvOCL, EMF, or plugin versions, change them in `VsumBuildProperties` and
+rebuild the image. A version overridden at runtime (`SETUP_VSUM_*_VERSION`) that is missing from the image
+is downloaded once and logged (`setup.vsum.online-fallback`); set `SETUP_VSUM_ONLINE_FALLBACK=false` to
+fail instead.
+
+On startup, the container builds the sample project again, offline. Until that succeeds,
+`/actuator/health/readiness` reports `OUT_OF_SERVICE`, so a deployment with a broken repository or
+incompatible versions never receives traffic.
 
 ## API Endpoints
 
@@ -91,64 +97,88 @@ curl -X POST -F "file=@mymodel.genmodel" \
   http://localhost:8090/api/genmodel/process
 ```
 
-### Build VSUM Project
+### Build VSUM
 
-**POST** `/api/vsum/build` (`multipart/form-data`)
+**POST** `/api/vsum/build` returns the generated project as a zip; **POST** `/api/vsum/jar` returns the
+executable VSUM jar, which hosts the VSUM in a Vitruvius server (`java -jar <jar> [port]`, type `quit` to stop).
 
-Uploads metamodel, genmodel, and reaction files, generates the project from FreeMarker templates,
-builds it, and returns the whole project as a zip archive (`vsum-project-<timestamp>.zip`).
-
-Parts:
-
-| Part | Required | Description |
-| --- | --- | --- |
-| `metamodelFiles` | yes | One or more `.ecore` metamodel files |
-| `genmodelFiles` | yes | `.genmodel` files, paired **by index** with `metamodelFiles` |
-| `reactionFiles` | yes | One or more `.reactions` files |
-| `constraintFiles` | no | VitruvOCL constraint files (`.ocl`), see [Constraints](#constraints) |
-
-`metamodelFiles` and `genmodelFiles` must have the same count — index *n* of one is matched with
-index *n* of the other. Reaction imports are normalized against the uploaded metamodels' nsURIs.
+| Part              | Required | Content                                                   |
+|-------------------|----------|-----------------------------------------------------------|
+| `metamodelFiles`  | yes      | Ecore metamodels (`.ecore`)                               |
+| `reactionFiles`   | no       | Reactions consistency specifications (`.reactions`)       |
+| `constraintFiles` | no       | VitruvOCL constraints (`.ocl`)                            |
+| `viewFiles`       | no       | NeoJoin view definitions (stored in the project, not compiled yet) |
 
 ```bash
 curl -X POST \
-  -F "metamodelFiles=@model.ecore" \
-  -F "genmodelFiles=@model.genmodel" \
-  -F "reactionFiles=@example.reactions" \
-  -F "constraintFiles=@Prices.ocl" \
-  -o vsum-project.zip \
-  http://localhost:8090/api/vsum/build
+  -F metamodelFiles=@model.ecore -F metamodelFiles=@model2.ecore \
+  -F reactionFiles=@templateReactions.reactions \
+  -F constraintFiles=@constraints.ocl \
+  -o vsum.jar http://localhost:8090/api/vsum/jar
 ```
 
-#### Constraints
+Genmodels are not uploaded; they are generated from the metamodels. The pipeline:
 
-Each constraint file is copied to `vsum/src/main/resources/constraints/` and registered in the
-generated `VSUMExample` with the `VitruvOclConstraintChecker` of VitruvOCL. The running VSUM then
-lists, validates, creates, updates, and deletes its constraints via the constraint endpoints of the
-[Vitruv-Server](https://github.com/vitruv-tools/Vitruv-Server) (`/vsum/constraints`).
+1. Validates the uploads (non-empty, expected extension, unique names).
+2. Loads the metamodels, resolves references between them (relative, `platform:/resource`, or nsURI),
+   validates them with EMF, and generates matching genmodels.
+3. Checks that every Reactions `import` refers to an uploaded nsURI.
+4. Generates a project following the [Methodologist Template](https://github.com/vitruv-tools/Methodologist-Template)
+   (`model`, `consistency`, `vsum`), with a smoke test that creates and reloads the VSUM and compiles the constraints.
+5. Runs `mvn clean verify`.
 
-- The file name is kept, e.g. the name of a rule set; only characters that are invalid in file
-  names are replaced, and duplicates get a numeric suffix.
-- Every context must name its metamodel (`context model::Component inv …`), and the metamodel must
-  be one of the uploaded ones. Otherwise the request fails fast with `400` and error code
-  `VSUM_INPUT_ERROR`; all other errors in a constraint show up when the VSUM loads it.
-- Empty constraint files are rejected with `400`.
+The generated VSUM registers the VitruvOCL constraints at the virtual model, so its Vitruv server lists,
+validates, and manages them under `/vsum/constraints`, and validates them after every change propagation.
 
-### Build VSUM Jar
+Invalid inputs are rejected with `400` before Maven runs (`VSUM_INPUT_ERROR`, `VSUM_METAMODEL_ERROR`,
+`VSUM_REACTIONS_ERROR`). Failed Maven builds are classified by their output, so that only problems of the
+uploads are reported as such:
 
-**POST** `/api/vsum/jar` (`multipart/form-data`)
+| Status | Error code               | Cause                                                                                     |
+|--------|--------------------------|-------------------------------------------------------------------------------------------|
+| `422`  | `VSUM_BUILD_FAILED`      | The uploaded metamodels, reactions, or constraints do not compile, or the smoke test fails |
+| `503`  | `VSUM_BUILD_UNAVAILABLE` | The build environment failed (dependency download, disk space, memory); retried once first |
+| `500`  | `VSUM_INTERNAL_ERROR`    | Code the service generates itself does not build, or the library versions are incompatible |
+| `504`  | `VSUM_BUILD_TIMEOUT`     | The build exceeded `setup.vsum.build-timeout`; the message names the module being built   |
 
-Same inputs and pairing rules as `/api/vsum/build`, but returns only the executable
-jar-with-dependencies produced under `vsum/target` (`application/java-archive`).
+Errors of the uploads are attributed to the file that causes them, with the line of the upload,
+an excerpt, and a hint where one is known. They are listed in `problems`, root causes first; `message`
+contains the same as readable text:
 
-```bash
-curl -X POST \
-  -F "metamodelFiles=@model.ecore" \
-  -F "genmodelFiles=@model.genmodel" \
-  -F "reactionFiles=@example.reactions" \
-  -o vsum.jar \
-  http://localhost:8090/api/vsum/jar
+```json
+{
+  "errorCode": "VSUM_BUILD_FAILED",
+  "status": 422,
+  "message": "The VSUM build failed:\n\nmy.reactions:\n- line 51, column 30: 'Entitiy' cannot be resolved\n...",
+  "problems": [
+    {
+      "source": "REACTIONS",
+      "file": "my.reactions",
+      "line": 51,
+      "column": 30,
+      "message": "'Entitiy' cannot be resolved",
+      "excerpt": "    val entity = new model2::Entitiy\n                             ^"
+    }
+  ]
+}
 ```
+
+`source` is `METAMODEL`, `REACTIONS`, `CONSTRAINTS`, `VIEWS`, `INFRASTRUCTURE`, or `INTERNAL`; `file`,
+`line`, `column`, `excerpt`, `hint`, and `hiddenFollowUpErrors` are omitted when unknown. Errors that only
+follow from another one, e.g. everything after a syntax error in the same reactions file, are not listed
+but counted in `hiddenFollowUpErrors`. Problems are reported for metamodels and reactions rejected before
+the build, for Reactions compiler and Java compiler errors, and for failures of the smoke test (constraints
+that cannot be evaluated, exceptions in reactions or routines while creating the VSUM).
+
+The workspaces of `503` and `500` builds are kept in the temporary directory for debugging and deleted on a
+later startup once older than `setup.vsum.workspace-retention`.
+
+Build settings are configured with `setup.vsum.*` properties (see `VsumBuildProperties`), e.g.
+`setup.vsum.build-timeout`, `setup.vsum.max-concurrent-builds`, `setup.vsum.maven-arguments`,
+`setup.vsum.maven-repository`, `setup.vsum.offline`, `setup.vsum.maven-opts` (the builds' JVM options;
+the service's `JAVA_TOOL_OPTIONS` are not passed on), the Vitruvius/VitruvOCL versions, and
+`setup.vsum.keep-failed-workspaces` for debugging. Concurrent builds share the local repository with
+file locking (Maven 3.9+).
 
 ## Standardization Rules
 
@@ -175,26 +205,27 @@ The GenModel endpoints apply these normalization rules:
 src/main/java/tools/vitruv/methodologist/setup/
 ├── model/
 │   ├── controller/           # GenModel REST controller + DTOs
-│   └── service/              # GenModel precheck and file services
+│   └── service/              # GenModel precheck, file, and ecore-to-genmodel services
 ├── vsum/
 │   ├── controller/           # VSUM REST controller
-│   └── service/              # Project generation, templating, and build
-├── config/                   # Swagger, Vitruv config, exception handling, class loading
-├── emf/                      # EMF model initialization
+│   └── service/              # VSUM build pipeline (metamodel, reactions, constraints, views,
+│                             # project generation, Maven build)
+├── config/                   # Swagger, exception handling
 ├── exception/                # Custom exceptions and error DTOs
 ├── log/                      # Request/response logging filter
 ├── messages/                 # Error and info message constants
-├── util/                     # File helpers
 ├── ResponseTemplateDto.java  # Generic API response envelope
 └── MethodologistSetupServiceApplication.java
 
-src/main/resources/templates/ # FreeMarker templates for generated VSUM projects
+src/main/resources/templates/vsum/ # FreeMarker templates for generated VSUM projects
 ```
 
 ## Health Check
 
 ```bash
 curl http://localhost:8090/actuator/health
+curl http://localhost:8090/actuator/health/liveness
+curl http://localhost:8090/actuator/health/readiness   # includes the VSUM build warm-up
 ```
 
 ## Configuration
@@ -209,32 +240,10 @@ Default settings:
 - OpenAPI docs: `/api-docs`
 - Log level for `tools.vitruv.methodologist`: `DEBUG`
 
-### Versions of generated projects
-
-Generated VSUM projects use the Vitruvius versions of `GeneratedProjectVersions`, which can be
-overridden with `vsum.generator.versions.{parent,change,framework,dsls,server,vitruvocl}`:
-
-| Property | Default | Artifacts |
-| --- | --- | --- |
-| `parent` | `4.0.0` | `tools.vitruv:parent` |
-| `change` | `4.0.2-SNAPSHOT` | `tools.vitruv.change.*`, must provide `Uuid.getRawValue()` |
-| `framework` | `4.0.2-SNAPSHOT` | `tools.vitruv.framework.*`, must provide the constraint SPI |
-| `dsls` | `4.0.0` | Reactions language and runtime |
-| `server` | `4.0.1-SNAPSHOT` | `tools.vitruv.server.remote`, must provide the constraint endpoints |
-| `vitruvocl` | `0.1.0-SNAPSHOT` | `tools.vitruv:tools.vitruv.vitruvocl.language` from [VitruviusOCL](https://github.com/vitruv-tools/VitruviusOCL) |
-
-Snapshot versions are resolved from the Maven Central snapshots. The service builds the projects
-with the local Maven installation, so artifacts installed into the local repository
-(`mvn install`) are used as well — e.g. to test unreleased changes of Vitruv-Change, Vitruv,
-VitruviusOCL, or the Vitruv-Server (install them in this order). When running the service in
-Docker, the container has its own Maven repository.
-
-Generated VSUM jars need Java 21 to run.
-
 ## Technologies
 
 - **Framework**: Spring Boot 4.0.6
-- **Modeling**: Eclipse EMF 2.35.0 (Ecore, XMI, Codegen)
+- **Modeling**: Eclipse EMF (Ecore 2.43.0, XMI 2.41.0, Codegen 2.47.0)
 - **Templating**: FreeMarker
 - **API Docs**: springdoc-openapi 3.0.0
 - **Logging**: Logback with logstash JSON encoder
@@ -245,12 +254,14 @@ Generated VSUM jars need Java 21 to run.
 
 ```bash
 ./mvnw clean verify        # full build with tests
+./mvnw verify -Dvsum.integration=true   # also builds generated VSUM projects with Maven
 ./mvnw spotless:apply      # auto-format sources
 ./mvnw checkstyle:check    # style check against checkstyle.xml
 ```
 
-CI (`.github/workflows/ci.yml`) runs `mvnw clean verify` on PRs to `main` and `develop`, plus
-nightly SonarQube analysis and a Checkstyle review pass.
+CI (`.github/workflows/ci.yml`) runs `mvnw clean verify` on PRs to `main` and `develop`, builds
+generated VSUM projects with Maven, builds the Docker image and checks that it builds VSUMs offline,
+plus nightly SonarQube analysis and a Checkstyle review pass.
 
 ## Error Handling
 
@@ -258,7 +269,12 @@ All requests return appropriate HTTP status codes:
 
 - `200 OK`: Successful operation
 - `400 Bad Request`: Invalid input or processing error
-- `500 Internal Server Error`: Unexpected server error
+- `413 Content Too Large`: Uploads exceed the configured size limit
+- `422 Unprocessable Content`: Invalid GenModel, or the generated VSUM does not build
+- `500 Internal Server Error`: Unexpected server error, or the generated VSUM project fails for reasons
+  of the service itself (`VSUM_INTERNAL_ERROR`)
+- `503 Service Unavailable`: The VSUM build environment failed; retrying later may succeed
+- `504 Gateway Timeout`: The VSUM build exceeded its timeout
 
 Errors are handled centrally in `GlobalExceptionHandler` and returned as structured responses with
 a message and error code to help with debugging.
