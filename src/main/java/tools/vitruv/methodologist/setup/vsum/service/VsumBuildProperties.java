@@ -71,8 +71,8 @@ public class VsumBuildProperties {
   // Vitruvius is released per repository, so the artifact groups can have different versions.
 
   /**
-   * Version of the Vitruv-Change artifacts ({@code tools.vitruv.change.*}). It must provide the
-   * raw value of UUIDs, which the Vitruv server returns for violating elements.
+   * Version of the Vitruv-Change artifacts ({@code tools.vitruv.change.*}). It must provide the raw
+   * value of UUIDs, which the Vitruv server returns for violating elements.
    */
   private String vitruvChangeVersion = "4.0.2-SNAPSHOT";
 
