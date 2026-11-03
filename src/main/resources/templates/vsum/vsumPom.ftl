@@ -61,8 +61,8 @@
 
         <!-- VitruvOCL: cross-model constraint language and evaluator -->
         <dependency>
-            <groupId>tools.vitruv.dsls</groupId>
-            <artifactId>vitruvocl-language</artifactId>
+            <groupId>tools.vitruv</groupId>
+            <artifactId>tools.vitruv.vitruvocl.language</artifactId>
         </dependency>
 </#if>
 

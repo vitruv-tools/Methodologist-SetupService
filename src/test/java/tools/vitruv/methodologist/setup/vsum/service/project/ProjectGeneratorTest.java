@@ -30,7 +30,8 @@ class ProjectGeneratorTest {
           "tools.vitruv.change.", "${vitruv.change.version}",
           "tools.vitruv.framework.", "${vitruv.framework.version}",
           "tools.vitruv.dsls.", "${vitruv.dsls.version}",
-          "tools.vitruv.server.", "${vitruv.server.version}");
+          "tools.vitruv.server.", "${vitruv.server.version}",
+          "tools.vitruv.vitruvocl.", "${vitruvocl.version}");
 
   private static final List<GeneratedMetamodel> METAMODELS =
       List.of(

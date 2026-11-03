@@ -14,8 +14,11 @@ import org.springframework.util.unit.DataSize;
 @ConfigurationProperties(prefix = "setup.vsum")
 public class VsumBuildProperties {
 
-  /** Maven executable used to build the generated project. */
-  private String mavenCommand = "mvn";
+  /** Maven executable used to build the generated project; {@code mvn.cmd} on Windows. */
+  private String mavenCommand =
+      System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).startsWith("windows")
+          ? "mvn.cmd"
+          : "mvn";
 
   /** Additional Maven arguments, e.g. {@code -s settings.xml}. */
   private List<String> mavenArguments = new ArrayList<>();
@@ -67,24 +70,33 @@ public class VsumBuildProperties {
 
   // Vitruvius is released per repository, so the artifact groups can have different versions.
 
-  /** Version of the Vitruv-Change artifacts ({@code tools.vitruv.change.*}). */
-  private String vitruvChangeVersion = "4.0.1";
+  /**
+   * Version of the Vitruv-Change artifacts ({@code tools.vitruv.change.*}). It must provide the raw
+   * value of UUIDs, which the Vitruv server returns for violating elements.
+   */
+  private String vitruvChangeVersion = "4.0.2-SNAPSHOT";
 
-  /** Version of the Vitruv framework artifacts ({@code tools.vitruv.framework.*}). */
-  private String vitruvFrameworkVersion = "4.0.1";
+  /**
+   * Version of the Vitruv framework artifacts ({@code tools.vitruv.framework.*}). It must provide
+   * the constraint SPI ({@code tools.vitruv.framework.vsum.constraints}).
+   */
+  private String vitruvFrameworkVersion = "4.0.2-SNAPSHOT";
 
   /** Version of the Vitruv-DSLs artifacts ({@code tools.vitruv.dsls.*}, e.g. Reactions). */
   private String vitruvDslsVersion = "4.0.0";
 
-  /** Version of the Vitruv-Server artifacts ({@code tools.vitruv.server.*}). */
-  private String vitruvServerVersion = "4.0.0";
+  /**
+   * Version of the Vitruv-Server artifacts ({@code tools.vitruv.server.*}). It must provide the
+   * constraint endpoints ({@code /vsum/constraints}).
+   */
+  private String vitruvServerVersion = "4.0.1-SNAPSHOT";
 
   /**
-   * Version of VitruvOCL. It has no release yet, so a timestamped snapshot is pinned instead of
-   * {@code 0.1.0-SNAPSHOT}, which changes whenever a new snapshot is published. Snapshots are
-   * removed from the snapshot repository after a while; the Docker image keeps its copy.
+   * Version of VitruvOCL ({@code tools.vitruv:tools.vitruv.vitruvocl.language} from the
+   * VitruviusOCL repository). It has no release yet; pin a timestamped snapshot once one is
+   * published, so that builds do not change whenever a new snapshot is published.
    */
-  private String vitruvoclVersion = "0.1.0-20261029.094026-91";
+  private String vitruvoclVersion = "0.1.0-SNAPSHOT";
 
   /** Version of {@code org.eclipse.emf.common}. */
   private String emfCommonVersion = "2.46.0";

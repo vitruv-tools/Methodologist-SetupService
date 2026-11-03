@@ -6,35 +6,36 @@ import java.io.InputStream;
 </#if>
 import java.io.UncheckedIOException;
 <#if constraintResources?has_content>
-import java.nio.file.Files;
+import java.nio.charset.StandardCharsets;
 </#if>
 import java.nio.file.Path;
-<#if constraintResources?has_content>
-import java.nio.file.StandardCopyOption;
-</#if>
 import java.util.ArrayList;
 import java.util.Collection;
+<#if constraintResources?has_content>
+import java.util.LinkedHashMap;
+</#if>
 import java.util.List;
+<#if constraintResources?has_content>
+import java.util.Map;
+</#if>
 import java.util.Scanner;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.xmi.impl.XMIResourceFactoryImpl;
-<#if constraintResources?has_content>
-import tools.vitruv.change.atomic.uuid.Uuid;
-import tools.vitruv.change.composite.description.PropagatedChange;
-import tools.vitruv.change.composite.description.VitruviusChange;
-import tools.vitruv.change.composite.propagation.ChangePropagationListener;
-</#if>
 import tools.vitruv.change.propagation.ChangePropagationSpecification;
 import tools.vitruv.change.testutils.TestUserInteraction;
 <#if constraintResources?has_content>
-import tools.vitruv.dsls.vitruvocl.pipeline.BatchValidationResult;
-import tools.vitruv.dsls.vitruvocl.pipeline.ConstraintResult;
-import tools.vitruv.dsls.vitruvocl.pipeline.VitruvOCL;
+import tools.vitruv.dsls.vitruvocl.vitruv.VitruvOclConstraintChecker;
 </#if>
 import tools.vitruv.framework.remote.server.VitruvServer;
 import tools.vitruv.framework.views.ViewType;
 import tools.vitruv.framework.views.ViewTypeFactory;
 import tools.vitruv.framework.vsum.VirtualModelBuilder;
+<#if constraintResources?has_content>
+import tools.vitruv.framework.vsum.constraints.ConstraintValidationListener.Trigger;
+import tools.vitruv.framework.vsum.constraints.ConstraintValidationReport;
+import tools.vitruv.framework.vsum.constraints.ConstraintValidationResult;
+import tools.vitruv.framework.vsum.constraints.InvalidConstraintException;
+</#if>
 import tools.vitruv.framework.vsum.internal.InternalVirtualModel;
 
 /**
@@ -95,9 +96,19 @@ public class [=vsumMainClass] {
                 new TestUserInteraction.ResultProvider(new TestUserInteraction()))
             .withChangePropagationSpecifications(createChangePropagationSpecifications())
             .withViewTypes(createViewTypes())
+<#if constraintResources?has_content>
+            // the Vitruv server lists, validates and manages the constraints via REST
+            .withConstraintChecker(createConstraintChecker())
+            .withConstraintValidationAfterPropagation(true)
+</#if>
             .buildAndInitialize();
 <#if constraintResources?has_content>
-    registerConstraintEvaluation(vsum);
+    vsum.addConstraintValidationListener(
+        (report, trigger) -> {
+          if (trigger == Trigger.PROPAGATION) {
+            reportViolations(report);
+          }
+        });
 </#if>
     return vsum;
   }
@@ -133,86 +144,85 @@ public class [=vsumMainClass] {
   }
 <#if constraintResources?has_content>
 
-  /** Evaluates all constraints after every change propagation and reports violations. */
-  static void registerConstraintEvaluation(InternalVirtualModel vsum) {
-    VitruvOCL.registerVSUM(vsum);
-    vsum.addChangePropagationListener(
-        new ChangePropagationListener() {
-          @Override
-          public void startedChangePropagation(VitruviusChange<Uuid> changeToPropagate) {
-            // constraints are evaluated once all reactions have been executed
-          }
-
-          @Override
-          public void finishedChangePropagation(Iterable<PropagatedChange> propagatedChanges) {
-            for (String resource : CONSTRAINT_RESOURCES) {
-              BatchValidationResult result = evaluateConstraints(resource);
-              result
-                  .getViolatedConstraints()
-                  .forEach(
-                      violation ->
-                          System.err.println(
-                              "[OCL VIOLATION] "
-                                  + violation.getConstraint()
-                                  + ": "
-                                  + violation.getWarningsSummary()));
-              if (!result.allSucceeded()) {
-                System.err.println("[OCL ERROR] " + resource + ":\n" + describeFailures(result));
-              }
-            }
-          }
-        });
+  /**
+   * Creates the checker of the VitruvOCL constraints of this VSUM.
+   *
+   * @return the checker of all constraint resources
+   * @throws IllegalArgumentException if a constraint resource cannot be parsed, described as by
+   *     {@link #describeFailures}
+   */
+  static VitruvOclConstraintChecker createConstraintChecker() {
+    for (String resource : CONSTRAINT_RESOURCES) {
+      try {
+        VitruvOclConstraintChecker.fromClasspath(resource);
+      } catch (InvalidConstraintException e) {
+        List<String> lines = readResource(resource).lines().toList();
+        Map<String, List<String>> errors = new LinkedHashMap<>();
+        e.getDiagnostics()
+            .forEach(
+                diagnostic ->
+                    errors
+                        .computeIfAbsent(
+                            diagnostic.line() >= 1 && diagnostic.line() <= lines.size()
+                                ? lines.get(diagnostic.line() - 1).strip()
+                                : resource,
+                            line -> new ArrayList<>())
+                        .add(
+                            diagnostic.line()
+                                + ":"
+                                + diagnostic.column()
+                                + " "
+                                + diagnostic.message()));
+        throw new IllegalArgumentException(describeFailures(resource, errors), e);
+      }
+    }
+    return VitruvOclConstraintChecker.fromClasspath(CONSTRAINT_RESOURCES.toArray(String[]::new));
   }
 
   /**
-   * Evaluates the constraints of a classpath resource against the registered VSUM.
+   * Describes constraints of a resource that cannot be evaluated, in the form the setup service
+   * attributes to the uploaded constraint file.
    *
-   * @param resource classpath resource of an {@code .ocl} file
-   * @return the evaluation result
+   * @param resource the classpath resource of the constraints
+   * @param errors the errors per constraint (its source or the faulty line)
+   * @return the description
    */
-  static BatchValidationResult evaluateConstraints(String resource) {
-    try {
-      Path file = Files.createTempFile("constraints", ".ocl");
-      try (InputStream input =
-          [=vsumMainClass].class.getClassLoader().getResourceAsStream(resource)) {
-        if (input == null) {
-          throw new IllegalStateException("Constraint resource not found: " + resource);
-        }
-        Files.copy(input, file, StandardCopyOption.REPLACE_EXISTING);
-        return VitruvOCL.evaluateConstraints(file);
-      } finally {
-        Files.deleteIfExists(file);
-      }
+  static String describeFailures(String resource, Map<String, List<String>> errors) {
+    StringBuilder description =
+        new StringBuilder("Constraints in " + resource + " cannot be evaluated:\n");
+    errors.forEach(
+        (constraint, constraintErrors) -> {
+          description.append("- ").append(constraint.replaceAll("\\s+", " ")).append('\n');
+          constraintErrors.forEach(error -> description.append("    ").append(error).append('\n'));
+        });
+    return description.toString();
+  }
+
+  private static String readResource(String resource) {
+    try (InputStream input =
+        [=vsumMainClass].class.getClassLoader().getResourceAsStream(resource)) {
+      return input == null ? "" : new String(input.readAllBytes(), StandardCharsets.UTF_8);
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }
   }
 
   /**
-   * Describes the constraints that could not be compiled or evaluated.
+   * Reports the constraints violated after a change propagation. The Vitruv server offers the
+   * full results, including the violating elements, under {@code /vsum/constraints/validate}.
    *
-   * @param result an evaluation result
-   * @return one entry per failed constraint with its errors
+   * @param report the validation result of all constraints
    */
-  static String describeFailures(BatchValidationResult result) {
-    StringBuilder description = new StringBuilder();
-    for (ConstraintResult failure : result.getFailedConstraints()) {
-      description
-          .append("- ")
-          .append(failure.getConstraint().strip().replaceAll("\\s+", " "))
-          .append('\n');
-      failure
-          .getCompilerErrors()
+  static void reportViolations(ConstraintValidationReport report) {
+    for (ConstraintValidationResult result : report.getUnsatisfiedResults()) {
+      String id = result.descriptor().id();
+      result
+          .violations()
           .forEach(
-              error ->
-                  description.append(
-                      String.format(
-                          "    %d:%d %s%n", error.getLine(), error.getColumn(), error.getMessage())));
-      failure
-          .getFileErrors()
-          .forEach(error -> description.append("    ").append(error.getMessage()).append('\n'));
+              violation ->
+                  System.err.println("[OCL VIOLATION] " + id + ": " + violation.message()));
+      result.errors().forEach(error -> System.err.println("[OCL ERROR] " + id + ": " + error));
     }
-    return description.toString();
   }
 </#if>
 }

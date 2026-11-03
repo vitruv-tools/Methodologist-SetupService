@@ -1,7 +1,7 @@
 -- VitruviusOCL Constraint File for the Methodologist Template
 --
 -- This file defines cross-model consistency constraints between model and model2.
--- Constraints are evaluated against the VSUM via VitruvOCL.evaluateConstraints(path).
+-- The generated VSUM registers the constraints, so its Vitruv server lists and validates them.
 --
 -- Syntax notes (OCL#):
 --   - context <Namespace>::<Metaclass> inv <ConstraintName>:

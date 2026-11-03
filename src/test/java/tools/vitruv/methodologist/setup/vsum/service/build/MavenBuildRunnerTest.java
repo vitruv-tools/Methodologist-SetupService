@@ -127,7 +127,7 @@ class MavenBuildRunnerTest {
 
     assertEquals(
         List.of(
-            "mvn",
+            properties.getMavenCommand(),
             "--batch-mode",
             "--no-transfer-progress",
             "--offline",

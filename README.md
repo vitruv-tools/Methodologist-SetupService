@@ -129,6 +129,9 @@ Genmodels are not uploaded; they are generated from the metamodels. The pipeline
    (`model`, `consistency`, `vsum`), with a smoke test that creates and reloads the VSUM and compiles the constraints.
 5. Runs `mvn clean verify`.
 
+The generated VSUM registers the VitruvOCL constraints at the virtual model, so its Vitruv server lists,
+validates, and manages them under `/vsum/constraints`, and validates them after every change propagation.
+
 Invalid inputs are rejected with `400` before Maven runs (`VSUM_INPUT_ERROR`, `VSUM_METAMODEL_ERROR`,
 `VSUM_REACTIONS_ERROR`). Failed Maven builds are classified by their output, so that only problems of the
 uploads are reported as such:

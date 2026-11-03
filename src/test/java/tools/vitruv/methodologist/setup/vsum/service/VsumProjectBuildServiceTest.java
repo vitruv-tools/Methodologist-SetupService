@@ -91,7 +91,8 @@ class VsumProjectBuildServiceTest {
 
     String rootPom = Files.readString(projectRoot.resolve("pom.xml"));
     assertTrue(rootPom.contains("<version>${vitruv.change.version}</version>"), rootPom);
-    assertTrue(rootPom.contains("<vitruv.change.version>4.0.1</vitruv.change.version>"), rootPom);
+    assertTrue(
+        rootPom.contains("<vitruv.change.version>4.0.2-SNAPSHOT</vitruv.change.version>"), rootPom);
     assertTrue(rootPom.contains("<vitruv.dsls.version>4.0.0</vitruv.dsls.version>"), rootPom);
 
     String workflow = Files.readString(projectRoot.resolve("model/workflow/generate.mwe2"));
@@ -114,9 +115,11 @@ class VsumProjectBuildServiceTest {
         main);
     assertTrue(
         main.contains("\"tools/vitruv/methodologisttemplate/consistency/constraints.ocl\""), main);
+    assertTrue(main.contains(".withConstraintChecker(createConstraintChecker())"), main);
 
     assertTrue(
-        Files.readString(projectRoot.resolve("vsum/pom.xml")).contains("vitruvocl-language"));
+        Files.readString(projectRoot.resolve("vsum/pom.xml"))
+            .contains("<artifactId>tools.vitruv.vitruvocl.language</artifactId>"));
   }
 
   @ParameterizedTest
@@ -171,7 +174,8 @@ class VsumProjectBuildServiceTest {
     service.generateProject(request, projectRoot);
 
     assertFalse(
-        Files.readString(projectRoot.resolve("vsum/pom.xml")).contains("vitruvocl-language"));
+        Files.readString(projectRoot.resolve("vsum/pom.xml"))
+            .contains("tools.vitruv.vitruvocl.language"));
     String main =
         Files.readString(
             projectRoot.resolve(

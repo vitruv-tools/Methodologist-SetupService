@@ -5,8 +5,17 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 <#if constraintResources?has_content>
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
+import java.util.List;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Assertions;
-import tools.vitruv.dsls.vitruvocl.pipeline.BatchValidationResult;
+import tools.vitruv.dsls.vitruvocl.vitruv.VitruvOclConstraintChecker;
+import tools.vitruv.framework.vsum.constraints.ConstraintDescriptor;
+import tools.vitruv.framework.vsum.constraints.ConstraintStatus;
+import tools.vitruv.framework.vsum.constraints.ConstraintValidationReport;
+import tools.vitruv.framework.vsum.constraints.ConstraintValidationResult;
 import tools.vitruv.framework.vsum.internal.InternalVirtualModel;
 </#if>
 
@@ -27,15 +36,24 @@ class [=vsumMainClass]Test {
   void constraintsCanBeEvaluated(@TempDir Path storageFolder) throws IOException {
     InternalVirtualModel vsum = [=vsumMainClass].createVirtualModel(storageFolder);
     try {
+      Assertions.assertEquals(
+          [=vsumMainClass].createConstraintChecker().getConstraints().size(),
+          vsum.getConstraints().size(),
+          "the VSUM registers all constraints");
+      ConstraintValidationReport report = vsum.validateConstraints();
       for (String resource : [=vsumMainClass].CONSTRAINT_RESOURCES) {
-        BatchValidationResult result = [=vsumMainClass].evaluateConstraints(resource);
+        Set<String> ids =
+            VitruvOclConstraintChecker.fromClasspath(resource).getConstraints().stream()
+                .map(ConstraintDescriptor::id)
+                .collect(Collectors.toSet());
+        Map<String, List<String>> errors = new LinkedHashMap<>();
+        for (ConstraintValidationResult result : report.results()) {
+          if (result.status() == ConstraintStatus.ERROR && ids.contains(result.descriptor().id())) {
+            errors.put(result.descriptor().source(), result.errors());
+          }
+        }
         Assertions.assertTrue(
-            result.allSucceeded(),
-            () ->
-                "Constraints in "
-                    + resource
-                    + " cannot be evaluated:\n"
-                    + [=vsumMainClass].describeFailures(result));
+            errors.isEmpty(), () -> [=vsumMainClass].describeFailures(resource, errors));
       }
     } finally {
       vsum.dispose();
