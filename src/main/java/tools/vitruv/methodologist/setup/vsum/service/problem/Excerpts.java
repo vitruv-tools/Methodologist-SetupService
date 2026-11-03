@@ -35,6 +35,20 @@ public final class Excerpts {
   }
 
   /**
+   * Returns a line of the text.
+   *
+   * @param text the file content, may be {@code null}
+   * @param line 1-based line
+   * @return the line without its line break, or {@code null} if the text or line is unknown
+   */
+  public static String line(String text, int line) {
+    if (text == null || line < 1) {
+      return null;
+    }
+    return text.lines().skip(line - 1L).findFirst().orElse(null);
+  }
+
+  /**
    * Returns the 1-based line containing the character at the offset.
    *
    * @param text the file content

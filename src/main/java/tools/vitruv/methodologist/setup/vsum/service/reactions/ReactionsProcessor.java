@@ -9,9 +9,12 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import lombok.extern.slf4j.Slf4j;
+import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.springframework.stereotype.Service;
 import tools.vitruv.methodologist.setup.vsum.service.UploadedFile;
@@ -27,6 +30,7 @@ import tools.vitruv.methodologist.setup.vsum.service.project.ProjectLayout;
  * Checks uploaded Reactions files against the uploaded metamodels, places them into the generated
  * project, and determines the change propagation specifications the Reactions compiler generates.
  */
+@Slf4j
 @Service
 public class ReactionsProcessor {
 
@@ -64,6 +68,7 @@ public class ReactionsProcessor {
         metamodel -> metamodel.packages().forEach(pkg -> knownNsUris.add(pkg.nsUri())));
     metamodels.forEach(metamodel -> knownNsUris.add(metamodel.nsUri()));
     knownNsUris.add(EcorePackage.eNS_URI);
+    Map<String, EPackage> packagesByNsUri = packagesByNsUri(metamodels);
 
     List<BuildProblem> problems = new ArrayList<>();
     Map<String, String> segmentOwners = new HashMap<>();
@@ -86,6 +91,8 @@ public class ReactionsProcessor {
                   .withHint(suggestion(nsUri, metamodels, knownNsUris)));
         }
       }
+
+      problems.addAll(check(file, packagesByNsUri));
 
       List<Segment> segments = segments(source);
       if (segments.isEmpty()) {
@@ -133,6 +140,37 @@ public class ReactionsProcessor {
       }
     }
     return specifications;
+  }
+
+  /**
+   * Checks the metamodel references of a file. The check only reports what the Reactions compiler
+   * rejects as well, so if it fails itself, the compiler has the final say.
+   */
+  private static List<BuildProblem> check(UploadedFile file, Map<String, EPackage> packages) {
+    try {
+      return ReactionsChecker.check(file, packages);
+    } catch (RuntimeException e) {
+      log.warn(
+          "Checking {} before the build failed; leaving it to the compiler", file.fileName(), e);
+      return List.of();
+    }
+  }
+
+  private static Map<String, EPackage> packagesByNsUri(List<GeneratedMetamodel> metamodels) {
+    Map<String, EPackage> packages = new HashMap<>();
+    packages.put(EcorePackage.eNS_URI, EcorePackage.eINSTANCE);
+    metamodels.stream()
+        .map(GeneratedMetamodel::ePackage)
+        .filter(Objects::nonNull)
+        .forEach(ePackage -> register(ePackage, packages));
+    return packages;
+  }
+
+  private static void register(EPackage ePackage, Map<String, EPackage> packages) {
+    if (ePackage.getNsURI() != null) {
+      packages.putIfAbsent(ePackage.getNsURI(), ePackage);
+    }
+    ePackage.getESubpackages().forEach(subpackage -> register(subpackage, packages));
   }
 
   /**
@@ -228,7 +266,7 @@ public class ReactionsProcessor {
   public record Segment(String name, int offset) {}
 
   /** Replaces string literals by spaces of the same length, keeping offsets and line breaks. */
-  private static String blankStrings(String source) {
+  static String blankStrings(String source) {
     Matcher matcher = STRINGS.matcher(source);
     StringBuilder result = new StringBuilder();
     while (matcher.find()) {
@@ -239,7 +277,7 @@ public class ReactionsProcessor {
     return result.toString();
   }
 
-  private static BuildProblem problem(UploadedFile file, int offset, String message) {
+  static BuildProblem problem(UploadedFile file, int offset, String message) {
     String text = file.text();
     return BuildProblem.at(
         Source.REACTIONS,

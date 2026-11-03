@@ -1,6 +1,7 @@
 package tools.vitruv.methodologist.setup.vsum.service.metamodel;
 
 import java.util.List;
+import org.eclipse.emf.ecore.EPackage;
 
 /**
  * A metamodel that was validated and placed into the generated project, together with its generated
@@ -11,17 +12,38 @@ import java.util.List;
  * @param ecoreFileName file name of the ecore inside the project's ecore directory
  * @param genmodelFileName file name of the genmodel inside the project's ecore directory
  * @param packages all packages EMF generates code for, including sub-packages
+ * @param ePackage the loaded root package, for checking the reactions against it; {@code null} if
+ *     not available
  */
 public record GeneratedMetamodel(
     String name,
     String nsUri,
     String ecoreFileName,
     String genmodelFileName,
-    List<GeneratedPackage> packages) {
+    List<GeneratedPackage> packages,
+    EPackage ePackage) {
 
   /** Makes the package list immutable. */
   public GeneratedMetamodel {
     packages = List.copyOf(packages);
+  }
+
+  /**
+   * Describes a metamodel without its loaded package.
+   *
+   * @param name name of the root EPackage
+   * @param nsUri namespace URI of the root EPackage
+   * @param ecoreFileName file name of the ecore inside the project's ecore directory
+   * @param genmodelFileName file name of the genmodel inside the project's ecore directory
+   * @param packages all packages EMF generates code for, including sub-packages
+   */
+  public GeneratedMetamodel(
+      String name,
+      String nsUri,
+      String ecoreFileName,
+      String genmodelFileName,
+      List<GeneratedPackage> packages) {
+    this(name, nsUri, ecoreFileName, genmodelFileName, packages, null);
   }
 
   /**
