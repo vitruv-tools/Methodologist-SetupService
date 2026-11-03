@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import org.eclipse.emf.codegen.ecore.genmodel.GenModel;
+import org.eclipse.emf.codegen.ecore.genmodel.GenRuntimeVersion;
 import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
@@ -54,6 +55,9 @@ class MetamodelProcessorTest {
     GenModel genModel =
         loadGenModel(ProjectLayout.ecoreDirectory(projectRoot).resolve("model.genmodel"));
     assertEquals(ProjectLayout.MODEL_ARTIFACT_ID, genModel.getModelPluginID());
+    // the platform backend's metamodel builder reads genmodels with EMF 2.33, which rejects newer
+    // runtime versions
+    assertEquals(GenRuntimeVersion.EMF233, genModel.getRuntimeVersion());
     assertEquals(
         "/tools.vitruv.methodologisttemplate.model/target/generated-sources/ecore",
         genModel.getModelDirectory());
