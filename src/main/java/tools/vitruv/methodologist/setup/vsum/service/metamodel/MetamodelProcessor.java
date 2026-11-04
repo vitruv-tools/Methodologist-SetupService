@@ -63,6 +63,12 @@ public class MetamodelProcessor {
   private static final Map<String, Object> SAVE_OPTIONS =
       Map.of(XMLResource.OPTION_ENCODING, "UTF-8");
 
+  /**
+   * Project root that {@link #check(List)} names the resources after. Nothing is read from or
+   * written to it; the resources only need URIs to resolve the references between the uploads.
+   */
+  private static final Path UNWRITTEN_PROJECT_ROOT = Path.of("unwritten-project");
+
   static {
     GenModelPackage.eINSTANCE.eClass();
     EValidator.Registry.INSTANCE.put(EcorePackage.eINSTANCE, EcoreValidator.INSTANCE);
@@ -82,8 +88,30 @@ public class MetamodelProcessor {
   public List<GeneratedMetamodel> process(List<UploadedFile> metamodels, Path projectRoot)
       throws IOException {
     Path ecoreDirectory = ProjectLayout.ecoreDirectory(projectRoot);
-    Files.createDirectories(ecoreDirectory);
+    Checked checked = checkAndGenerate(metamodels, ecoreDirectory);
 
+    Files.createDirectories(ecoreDirectory);
+    for (Resource resource : checked.resourceSet().getResources()) {
+      resource.save(SAVE_OPTIONS);
+    }
+    return checked.metamodels();
+  }
+
+  /**
+   * Runs the same checks as {@link #process(List, Path)} without writing anything.
+   *
+   * @param metamodels uploaded ecore files
+   * @return one entry per uploaded metamodel, in upload order
+   * @throws VsumBuildException when a metamodel is unparsable, invalid, or references a metamodel
+   *     that was not uploaded
+   */
+  public List<GeneratedMetamodel> check(List<UploadedFile> metamodels) {
+    return checkAndGenerate(metamodels, ProjectLayout.ecoreDirectory(UNWRITTEN_PROJECT_ROOT))
+        .metamodels();
+  }
+
+  /** Checks the metamodels and generates their genmodels in memory, without saving them. */
+  private Checked checkAndGenerate(List<UploadedFile> metamodels, Path ecoreDirectory) {
     ResourceSet resourceSet = createIsolatedResourceSet();
     Map<UploadedFile, EPackage> packages = load(metamodels, resourceSet, ecoreDirectory);
     resolveCrossReferences(resourceSet, packages);
@@ -105,14 +133,15 @@ public class MetamodelProcessor {
     checkGeneratedNames(packages, genModels);
     addUsedGenPackages(genModels);
 
-    for (Resource resource : resourceSet.getResources()) {
-      resource.save(SAVE_OPTIONS);
-    }
-
-    return genModels.entrySet().stream()
-        .map(entry -> describe(entry.getKey(), entry.getValue()))
-        .toList();
+    return new Checked(
+        resourceSet,
+        genModels.entrySet().stream()
+            .map(entry -> describe(entry.getKey(), entry.getValue()))
+            .toList());
   }
+
+  /** Checked metamodels and their genmodels, all in one resource set that is not saved yet. */
+  private record Checked(ResourceSet resourceSet, List<GeneratedMetamodel> metamodels) {}
 
   /**
    * Creates a resource set that never loads anything from disk or network. All metamodels must be
