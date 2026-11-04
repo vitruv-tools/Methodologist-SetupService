@@ -24,6 +24,8 @@ import tools.vitruv.methodologist.setup.config.GlobalExceptionHandler;
 import tools.vitruv.methodologist.setup.exception.MethodologistSetupException;
 import tools.vitruv.methodologist.setup.vsum.service.VsumErrorCodes;
 import tools.vitruv.methodologist.setup.vsum.service.VsumProjectBuildService;
+import tools.vitruv.methodologist.setup.vsum.service.VsumValidationResult;
+import tools.vitruv.methodologist.setup.vsum.service.VsumValidationService;
 import tools.vitruv.methodologist.setup.vsum.service.problem.BuildProblem;
 import tools.vitruv.methodologist.setup.vsum.service.problem.BuildProblem.Source;
 import tools.vitruv.methodologist.setup.vsum.service.problem.VsumBuildException;
@@ -37,13 +39,15 @@ class VsumControllerErrorHandlingTest {
           "reactionFiles", "a.reactions", "text/plain", "reactions: a".getBytes());
 
   private VsumProjectBuildService buildService;
+  private VsumValidationService validationService;
   private MockMvc mockMvc;
 
   @BeforeEach
   void setUp() {
     buildService = mock(VsumProjectBuildService.class);
+    validationService = mock(VsumValidationService.class);
     mockMvc =
-        MockMvcBuilders.standaloneSetup(new VsumController(buildService))
+        MockMvcBuilders.standaloneSetup(new VsumController(buildService, validationService))
             .setControllerAdvice(new GlobalExceptionHandler())
             .build();
   }
@@ -169,5 +173,60 @@ class VsumControllerErrorHandlingTest {
         .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
         .andExpect(jsonPath("$.errorCode").value(VsumErrorCodes.BUILD_FAILED))
         .andExpect(jsonPath("$.message").value("The VSUM build failed:\n[ERROR] boom"));
+  }
+
+  @Test
+  void invalidProjectsAreValidatedWithOk() throws Exception {
+    when(validationService.validate(any()))
+        .thenReturn(
+            VsumValidationResult.of(
+                List.of(
+                    BuildProblem.at(
+                            Source.REACTIONS,
+                            "a.reactions",
+                            "import \"http://x\"\n",
+                            1,
+                            8,
+                            "imports 'http://x', which is not the nsURI of an uploaded metamodel")
+                        .withHint("Did you mean 'http://a'?"))));
+
+    mockMvc
+        .perform(multipart("/api/vsum/validate").file(METAMODEL).file(REACTIONS))
+        .andExpect(status().isOk())
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+        .andExpect(jsonPath("$.valid").value(false))
+        .andExpect(jsonPath("$.problems[0].source").value("REACTIONS"))
+        .andExpect(jsonPath("$.problems[0].file").value("a.reactions"))
+        .andExpect(jsonPath("$.problems[0].line").value(1))
+        .andExpect(jsonPath("$.problems[0].column").value(8))
+        .andExpect(jsonPath("$.problems[0].hint").value("Did you mean 'http://a'?"))
+        .andExpect(jsonPath("$.problems[0].hiddenFollowUpErrors").doesNotExist());
+    verify(validationService)
+        .validate(
+            argThat(
+                request ->
+                    request.metamodels().get(0).fileName().equals("a.ecore")
+                        && request.reactions().get(0).fileName().equals("a.reactions")));
+    verifyNoInteractions(buildService);
+  }
+
+  @Test
+  void validProjectsHaveNoProblems() throws Exception {
+    when(validationService.validate(any())).thenReturn(VsumValidationResult.of(List.of()));
+
+    mockMvc
+        .perform(multipart("/api/vsum/validate").file(METAMODEL))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.valid").value(true))
+        .andExpect(jsonPath("$.problems").isEmpty());
+  }
+
+  @Test
+  void malformedValidationRequestsAreABadRequest() throws Exception {
+    mockMvc
+        .perform(multipart("/api/vsum/validate").file(REACTIONS))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errorCode").value("INVALID_REQUEST"));
+    verifyNoInteractions(validationService);
   }
 }

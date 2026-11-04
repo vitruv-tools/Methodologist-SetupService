@@ -63,6 +63,32 @@ public class ReactionsProcessor {
   public List<String> process(
       List<UploadedFile> reactions, List<GeneratedMetamodel> metamodels, Path projectRoot)
       throws IOException {
+    List<String> specifications = check(reactions, metamodels);
+
+    Path directory = ProjectLayout.reactionsDirectory(projectRoot);
+    Files.createDirectories(directory);
+    for (UploadedFile file : reactions) {
+      String text = file.text();
+      String normalized = hoistJavaImports(text);
+      if (normalized.equals(text)) {
+        Files.write(directory.resolve(file.fileName()), file.content());
+      } else {
+        Files.writeString(directory.resolve(file.fileName()), normalized, StandardCharsets.UTF_8);
+      }
+    }
+    return specifications;
+  }
+
+  /**
+   * Runs the same checks as {@link #process(List, List, Path)} without writing anything.
+   *
+   * @param reactions uploaded reactions files
+   * @param metamodels the checked metamodels the reactions may import
+   * @return generated change propagation specification class names, one per reactions segment
+   * @throws VsumBuildException when a file declares no segment, a segment is declared twice, or a
+   *     file imports a metamodel that was not uploaded
+   */
+  public List<String> check(List<UploadedFile> reactions, List<GeneratedMetamodel> metamodels) {
     Set<String> knownNsUris = new LinkedHashSet<>();
     metamodels.forEach(
         metamodel -> metamodel.packages().forEach(pkg -> knownNsUris.add(pkg.nsUri())));
@@ -126,18 +152,6 @@ public class ReactionsProcessor {
           VsumErrorCodes.REACTIONS_ERROR,
           "The uploaded reactions do not match the uploaded metamodels:",
           problems);
-    }
-
-    Path directory = ProjectLayout.reactionsDirectory(projectRoot);
-    Files.createDirectories(directory);
-    for (UploadedFile file : reactions) {
-      String text = file.text();
-      String normalized = hoistJavaImports(text);
-      if (normalized.equals(text)) {
-        Files.write(directory.resolve(file.fileName()), file.content());
-      } else {
-        Files.writeString(directory.resolve(file.fileName()), normalized, StandardCharsets.UTF_8);
-      }
     }
     return specifications;
   }

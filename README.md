@@ -10,6 +10,7 @@ constraints, and view definitions.
 - **GenModel Processing**: Apply standardization rules and download the corrected file
 - **VSUM Build**: Generate genmodels and a Methodologist-Template project from metamodels, reactions,
   and VitruvOCL constraints, build and smoke-test it, and return the project zip or executable jar
+- **VSUM Validation**: Run the checks of the build without building, e.g. after every save
 - **OpenAPI / Swagger UI**: Interactive API documentation
 - **Error Handling**: Centralized exception handling with structured error responses
 - **Docker Support**: Dockerfile and Compose setup included
@@ -172,6 +173,38 @@ follow from another one, e.g. everything after a syntax error in the same reacti
 but counted in `hiddenFollowUpErrors`. Problems are reported for metamodels and reactions rejected before
 the build, for Reactions compiler and Java compiler errors, and for failures of the smoke test (constraints
 that cannot be evaluated, exceptions in reactions or routines while creating the VSUM).
+
+### Validate VSUM
+
+**POST** `/api/vsum/validate` takes the same parts as `/api/vsum/build` and runs the
+[checks before the build](#checks-before-the-build) through the same code, without writing a project or
+running Maven, so it can run after every save while the project is edited.
+
+It returns `200` also for invalid projects, with the problems the build would report before Maven:
+
+```json
+{
+  "valid": false,
+  "problems": [
+    {
+      "source": "REACTIONS",
+      "file": "my.reactions",
+      "line": 51,
+      "column": 30,
+      "message": "'Entitiy' is not a class of the metamodel 'model2' (http://vitruv.tools/methodologisttemplate/model2)",
+      "excerpt": "    val entity = new model2::Entitiy\n                             ^",
+      "hint": "Did you mean 'Entity'?"
+    }
+  ]
+}
+```
+
+`valid` is `false` if there is any problem. Like the build, the checks stop at the first stage with
+problems: reactions are only checked once the metamodels are valid. Malformed requests (no metamodel,
+empty files, wrong extensions, duplicate names) are rejected with `400` and `VSUM_INPUT_ERROR` or
+`INVALID_REQUEST`, as for builds. Errors only Maven finds (Reactions compiler, Java compiler, smoke
+test) are not reported. Validations don't use the build slots (`setup.vsum.max-concurrent-builds`), so they
+never wait for running builds.
 
 ### Checks before the build
 

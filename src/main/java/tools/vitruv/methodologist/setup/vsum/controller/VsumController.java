@@ -21,9 +21,11 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import tools.vitruv.methodologist.setup.vsum.service.VsumBuildRequest;
 import tools.vitruv.methodologist.setup.vsum.service.VsumProjectBuildService;
+import tools.vitruv.methodologist.setup.vsum.service.VsumValidationResult;
+import tools.vitruv.methodologist.setup.vsum.service.VsumValidationService;
 import tools.vitruv.methodologist.setup.vsum.service.project.ProjectLayout;
 
-/** REST API for VSUM project generation and packaging. */
+/** REST API for VSUM project generation, packaging, and validation. */
 @RestController
 @RequestMapping("/api/vsum")
 @RequiredArgsConstructor
@@ -31,6 +33,7 @@ import tools.vitruv.methodologist.setup.vsum.service.project.ProjectLayout;
 public class VsumController {
 
   private final VsumProjectBuildService vsumProjectBuildService;
+  private final VsumValidationService vsumValidationService;
 
   /**
    * Builds a VSUM from the uploaded files and returns the generated project as a zip archive.
@@ -117,6 +120,51 @@ public class VsumController {
         VsumBuildRequest.fromMultipart(metamodelFiles, reactionFiles, constraintFiles, viewFiles);
     byte[] jar = vsumProjectBuildService.buildProjectJar(request);
     return attachment(jar, "application/java-archive", ProjectLayout.VSUM_JAR_FILENAME);
+  }
+
+  /**
+   * Checks the uploaded files like a build does before Maven runs, without building them.
+   *
+   * @param metamodelFiles Ecore metamodels
+   * @param reactionFiles Reactions consistency specifications
+   * @param constraintFiles VitruvOCL constraints
+   * @param viewFiles NeoJoin view definitions
+   * @return whether the project is valid, and its problems
+   */
+  @PostMapping(
+      value = "/validate",
+      consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+      produces = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(
+      summary = "Validate VSUM project",
+      description =
+          "Runs the checks /build runs before Maven, without generating a project or running"
+              + " Maven, and returns the problems found. Invalid projects are reported with 200"
+              + " and valid: false. Validations do not use the build slots, so they never wait"
+              + " for running builds",
+      responses = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "Validation result, also for invalid projects",
+            content = @Content(mediaType = "application/json")),
+        @ApiResponse(responseCode = "400", description = "Malformed request")
+      })
+  public VsumValidationResult validateProject(
+      @Parameter(description = "Ecore metamodel files", required = true)
+          @RequestPart("metamodelFiles")
+          List<MultipartFile> metamodelFiles,
+      @Parameter(description = "Reactions files")
+          @RequestPart(value = "reactionFiles", required = false)
+          List<MultipartFile> reactionFiles,
+      @Parameter(description = "VitruvOCL constraint files")
+          @RequestPart(value = "constraintFiles", required = false)
+          List<MultipartFile> constraintFiles,
+      @Parameter(description = "NeoJoin view definitions")
+          @RequestPart(value = "viewFiles", required = false)
+          List<MultipartFile> viewFiles) {
+    VsumBuildRequest request =
+        VsumBuildRequest.fromMultipart(metamodelFiles, reactionFiles, constraintFiles, viewFiles);
+    return vsumValidationService.validate(request);
   }
 
   private ResponseEntity<byte[]> attachment(byte[] content, String mediaType, String filename) {

@@ -124,6 +124,7 @@ public class VsumProjectBuildService {
    * @throws IOException when writing the project fails
    */
   ProjectSources generateProject(VsumBuildRequest request, Path projectRoot) throws IOException {
+    // VsumValidationService runs the checks of these steps without writing; keep both in sync
     List<GeneratedMetamodel> metamodels =
         metamodelProcessor.process(request.metamodels(), projectRoot);
     List<String> specifications =
