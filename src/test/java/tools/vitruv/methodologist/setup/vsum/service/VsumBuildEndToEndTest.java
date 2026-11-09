@@ -23,6 +23,7 @@ import tools.vitruv.methodologist.setup.vsum.service.constraints.ConstraintsProc
 import tools.vitruv.methodologist.setup.vsum.service.metamodel.MetamodelProcessor;
 import tools.vitruv.methodologist.setup.vsum.service.project.ProjectGenerator;
 import tools.vitruv.methodologist.setup.vsum.service.reactions.ReactionsProcessor;
+import tools.vitruv.methodologist.setup.vsum.service.views.NeoJoinChecker;
 import tools.vitruv.methodologist.setup.vsum.service.views.NeoJoinViewDefinitionProcessor;
 
 /**
@@ -40,6 +41,7 @@ class VsumBuildEndToEndTest {
           new MetamodelProcessor(),
           new ReactionsProcessor(),
           new ConstraintsProcessor(),
+          new NeoJoinChecker(),
           new NeoJoinViewDefinitionProcessor(),
           new ProjectGenerator(properties),
           new MavenBuildRunner(properties),

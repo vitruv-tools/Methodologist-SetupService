@@ -38,6 +38,7 @@ import tools.vitruv.methodologist.setup.vsum.service.problem.VsumBuildException;
 import tools.vitruv.methodologist.setup.vsum.service.project.ProjectGenerator;
 import tools.vitruv.methodologist.setup.vsum.service.project.ProjectLayout;
 import tools.vitruv.methodologist.setup.vsum.service.reactions.ReactionsProcessor;
+import tools.vitruv.methodologist.setup.vsum.service.views.NeoJoinChecker;
 import tools.vitruv.methodologist.setup.vsum.service.views.NeoJoinViewDefinitionProcessor;
 
 class VsumProjectBuildServiceTest {
@@ -47,7 +48,7 @@ class VsumProjectBuildServiceTest {
           List.of(fixture("model.ecore"), fixture("model2.ecore")),
           List.of(fixture("templateReactions.reactions")),
           List.of(fixture("constraints.ocl")),
-          List.of(text("components.nj", "view stub")));
+          List.of(fixture("components.nj")));
 
   private final VsumBuildProperties properties = new VsumBuildProperties();
   private final VsumProjectBuildService service =
@@ -55,6 +56,7 @@ class VsumProjectBuildServiceTest {
           new MetamodelProcessor(),
           new ReactionsProcessor(),
           new ConstraintsProcessor(),
+          new NeoJoinChecker(),
           new NeoJoinViewDefinitionProcessor(),
           new ProjectGenerator(properties),
           new MavenBuildRunner(properties),
@@ -142,6 +144,7 @@ class VsumProjectBuildServiceTest {
             new MetamodelProcessor(),
             new ReactionsProcessor(),
             new ConstraintsProcessor(),
+            new NeoJoinChecker(),
             new NeoJoinViewDefinitionProcessor(),
             new ProjectGenerator(properties),
             mavenBuildRunner,
@@ -192,6 +195,7 @@ class VsumProjectBuildServiceTest {
             new MetamodelProcessor(),
             new ReactionsProcessor(),
             new ConstraintsProcessor(),
+            new NeoJoinChecker(),
             new NeoJoinViewDefinitionProcessor(),
             new ProjectGenerator(properties),
             mavenBuildRunner,
@@ -216,6 +220,47 @@ class VsumProjectBuildServiceTest {
     assertEquals("my.reactions", problem.file());
     assertEquals(lineContaining(reactions, "model2::Entitiy"), problem.line());
     assertEquals("Did you mean 'Entity'?", problem.hint());
+  }
+
+  /** An invalid view definition is rejected by NeoJoin before the Maven build of /build or /jar. */
+  @Test
+  void rejectsInvalidViewDefinitionsBeforeTheMavenBuild() throws IOException {
+    MavenBuildRunner mavenBuildRunner = mock(MavenBuildRunner.class);
+    VsumProjectBuildService checked =
+        new VsumProjectBuildService(
+            new MetamodelProcessor(),
+            new ReactionsProcessor(),
+            new ConstraintsProcessor(),
+            new NeoJoinChecker(),
+            new NeoJoinViewDefinitionProcessor(),
+            new ProjectGenerator(properties),
+            mavenBuildRunner,
+            properties);
+    String view =
+        fixture("components.nj")
+            .text()
+            .replace("http://vitruv.tools/methodologisttemplate/model\"", "http://example.org/x\"");
+    VsumBuildRequest request =
+        new VsumBuildRequest(
+            List.of(fixture("model.ecore"), fixture("model2.ecore")),
+            List.of(fixture("templateReactions.reactions")),
+            List.of(),
+            List.of(text("components.nj", view)));
+
+    for (Runnable build :
+        List.<Runnable>of(
+            () -> checked.buildProjectJar(request), () -> checked.buildProjectArchive(request))) {
+      VsumBuildException exception = assertThrows(VsumBuildException.class, build::run);
+
+      assertEquals(VsumErrorCodes.INPUT_ERROR, exception.getErrorCode());
+      assertEquals(HttpStatus.BAD_REQUEST, exception.getStatus());
+      BuildProblem problem = exception.getProblems().get(0);
+      assertEquals(Source.VIEWS, problem.source());
+      assertEquals("components.nj", problem.file());
+      assertEquals(lineContaining(view, "http://example.org/x"), problem.line());
+      assertTrue(problem.message().contains("http://example.org/x"), problem.message());
+    }
+    verify(mavenBuildRunner, never()).build(any(), any());
   }
 
   /**
