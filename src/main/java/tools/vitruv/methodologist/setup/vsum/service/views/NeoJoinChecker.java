@@ -30,6 +30,11 @@ import tools.vitruv.neojoin.NeoJoinStandaloneSetup;
 import tools.vitruv.neojoin.Parser;
 import tools.vitruv.neojoin.ast.AstPackage;
 
+/**
+ * Checks NeoJoin view definitions before the build: parses and validates each file with NeoJoin
+ * against the uploaded metamodels, and rejects export names and view-type nsURIs declared in more
+ * than one file.
+ */
 @Service
 public class NeoJoinChecker {
 
@@ -49,6 +54,15 @@ public class NeoJoinChecker {
           XtypePackage.eINSTANCE,
           TypesPackage.eINSTANCE);
 
+  /**
+   * Checks the view definitions against the metamodels. Syntax errors, unresolved imports, Xbase
+   * type errors, and duplicate export names or view-type nsURIs are reported together.
+   *
+   * @param viewDefinitions uploaded NeoJoin view definitions
+   * @param metamodels the processed metamodels the views may import
+   * @throws VsumBuildException when a view definition is invalid
+   * @throws IOException when a view definition cannot be written to a temporary file for parsing
+   */
   public void check(List<UploadedFile> viewDefinitions, List<GeneratedMetamodel> metamodels)
       throws IOException {
     synchronized (XTEXT_VALIDATOR_LOCK) {
