@@ -22,13 +22,17 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import tools.vitruv.methodologist.setup.config.GlobalExceptionHandler;
 import tools.vitruv.methodologist.setup.exception.MethodologistSetupException;
+import tools.vitruv.methodologist.setup.vsum.service.TestFiles;
 import tools.vitruv.methodologist.setup.vsum.service.VsumErrorCodes;
 import tools.vitruv.methodologist.setup.vsum.service.VsumProjectBuildService;
 import tools.vitruv.methodologist.setup.vsum.service.VsumValidationResult;
 import tools.vitruv.methodologist.setup.vsum.service.VsumValidationService;
+import tools.vitruv.methodologist.setup.vsum.service.metamodel.MetamodelProcessor;
 import tools.vitruv.methodologist.setup.vsum.service.problem.BuildProblem;
 import tools.vitruv.methodologist.setup.vsum.service.problem.BuildProblem.Source;
 import tools.vitruv.methodologist.setup.vsum.service.problem.VsumBuildException;
+import tools.vitruv.methodologist.setup.vsum.service.reactions.ReactionsProcessor;
+import tools.vitruv.methodologist.setup.vsum.service.views.NeoJoinChecker;
 
 class VsumControllerErrorHandlingTest {
 
@@ -207,6 +211,59 @@ class VsumControllerErrorHandlingTest {
                 request ->
                     request.metamodels().get(0).fileName().equals("a.ecore")
                         && request.reactions().get(0).fileName().equals("a.reactions")));
+    verifyNoInteractions(buildService);
+  }
+
+  /** /validate runs NeoJoin on the uploaded views, and reports their problems with 200. */
+  @Test
+  void viewDefinitionsAreValidatedByNeoJoin() throws Exception {
+    MockMvc validating =
+        MockMvcBuilders.standaloneSetup(
+                new VsumController(
+                    buildService,
+                    new VsumValidationService(
+                        new MetamodelProcessor(), new ReactionsProcessor(), new NeoJoinChecker())))
+            .setControllerAdvice(new GlobalExceptionHandler())
+            .build();
+    MockMultipartFile metamodel =
+        new MockMultipartFile(
+            "metamodelFiles",
+            "model.ecore",
+            "application/xml",
+            TestFiles.fixture("model.ecore").content());
+    MockMultipartFile view =
+        new MockMultipartFile(
+            "viewFiles",
+            "components.nj",
+            "text/plain",
+            TestFiles.fixture("components.nj")
+                .text()
+                .replace("from Component", "from Komponent")
+                .getBytes());
+
+    validating
+        .perform(multipart("/api/vsum/validate").file(metamodel).file(view))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.valid").value(false))
+        .andExpect(jsonPath("$.problems[0].source").value("VIEWS"))
+        .andExpect(jsonPath("$.problems[0].file").value("components.nj"))
+        .andExpect(jsonPath("$.problems[0].line").value(5))
+        .andExpect(jsonPath("$.problems[0].column").value(6))
+        .andExpect(
+            jsonPath("$.problems[0].message")
+                .value(org.hamcrest.Matchers.containsString("Komponent")));
+    validating
+        .perform(
+            multipart("/api/vsum/validate")
+                .file(metamodel)
+                .file(
+                    new MockMultipartFile(
+                        "viewFiles",
+                        "components.nj",
+                        "text/plain",
+                        TestFiles.fixture("components.nj").content())))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.valid").value(true));
     verifyNoInteractions(buildService);
   }
 

@@ -28,6 +28,7 @@ import tools.vitruv.methodologist.setup.vsum.service.problem.VsumBuildException;
 import tools.vitruv.methodologist.setup.vsum.service.project.ProjectGenerator;
 import tools.vitruv.methodologist.setup.vsum.service.project.ProjectLayout;
 import tools.vitruv.methodologist.setup.vsum.service.reactions.ReactionsProcessor;
+import tools.vitruv.methodologist.setup.vsum.service.views.NeoJoinChecker;
 import tools.vitruv.methodologist.setup.vsum.service.views.ViewDefinitionProcessor;
 
 /**
@@ -48,6 +49,7 @@ public class VsumProjectBuildService {
   private final MetamodelProcessor metamodelProcessor;
   private final ReactionsProcessor reactionsProcessor;
   private final ConstraintsProcessor constraintsProcessor;
+  private final NeoJoinChecker neoJoinChecker;
   private final ViewDefinitionProcessor viewDefinitionProcessor;
   private final ProjectGenerator projectGenerator;
   private final MavenBuildRunner mavenBuildRunner;
@@ -131,6 +133,7 @@ public class VsumProjectBuildService {
         reactionsProcessor.process(request.reactions(), metamodels, projectRoot);
     List<String> constraintResources =
         constraintsProcessor.process(request.constraints(), projectRoot);
+    neoJoinChecker.check(request.viewDefinitions(), metamodels);
     viewDefinitionProcessor.process(request.viewDefinitions(), metamodels, projectRoot);
     projectGenerator.generate(projectRoot, metamodels, specifications, constraintResources);
     return sources(request, metamodels, constraintResources, projectRoot);

@@ -29,6 +29,9 @@ public record VsumBuildRequest(
   /** File extension of VitruvOCL constraint files. */
   public static final String CONSTRAINTS_EXTENSION = ".ocl";
 
+  /** File extension of view files. */
+  public static final String VIEWS_EXTENSION = ".nj";
+
   /** Makes the lists immutable and rejects {@code null} lists. */
   public VsumBuildRequest {
     metamodels = List.copyOf(metamodels);
@@ -60,7 +63,7 @@ public record VsumBuildRequest(
         read(metamodelFiles, "metamodel", METAMODEL_EXTENSION),
         read(reactionFiles, "reactions", REACTIONS_EXTENSION),
         read(constraintFiles, "constraint", CONSTRAINTS_EXTENSION),
-        read(viewFiles, "view definition", null));
+        read(viewFiles, "view definition", VIEWS_EXTENSION));
   }
 
   private static List<UploadedFile> read(
