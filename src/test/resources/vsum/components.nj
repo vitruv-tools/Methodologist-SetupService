@@ -1,0 +1,9 @@
+export components to "http://vitruv.tools/methodologisttemplate/views/components"
+
+import "http://vitruv.tools/methodologisttemplate/model"
+
+from Component c
+create ComponentView {
+    c.name
+    protocolCount := c.supportedProtocols.size
+}

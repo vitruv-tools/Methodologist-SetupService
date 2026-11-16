@@ -46,6 +46,28 @@ class VsumBuildRequestTest {
   }
 
   @Test
+  void rejectsViewDefinitionsWithoutTheNeoJoinExtension() {
+    MethodologistSetupException exception =
+        assertThrows(
+            MethodologistSetupException.class,
+            () ->
+                VsumBuildRequest.fromMultipart(
+                    List.of(file("m.ecore")), null, null, List.of(file("view.txt"))));
+
+    assertEquals(VsumErrorCodes.INPUT_ERROR, exception.getErrorCode());
+    assertTrue(exception.getMessage().contains("'.nj'"), exception.getMessage());
+  }
+
+  @Test
+  void acceptsViewDefinitionsWithTheNeoJoinExtension() {
+    VsumBuildRequest request =
+        VsumBuildRequest.fromMultipart(
+            List.of(file("m.ecore")), null, null, List.of(file("Components.NJ")));
+
+    assertEquals("Components.NJ", request.viewDefinitions().get(0).fileName());
+  }
+
+  @Test
   void rejectsEmptyFiles() {
     MockMultipartFile empty = new MockMultipartFile("metamodelFiles", "m.ecore", null, new byte[0]);
 

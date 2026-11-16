@@ -29,6 +29,7 @@ import tools.vitruv.methodologist.setup.vsum.service.project.ProjectGenerator;
 import tools.vitruv.methodologist.setup.vsum.service.project.ProjectLayout;
 import tools.vitruv.methodologist.setup.vsum.service.reactions.ReactionsProcessor;
 import tools.vitruv.methodologist.setup.vsum.service.views.GeneratedViewType;
+import tools.vitruv.methodologist.setup.vsum.service.views.NeoJoinChecker;
 import tools.vitruv.methodologist.setup.vsum.service.views.ViewDefinitionProcessor;
 
 /**
@@ -49,6 +50,7 @@ public class VsumProjectBuildService {
   private final MetamodelProcessor metamodelProcessor;
   private final ReactionsProcessor reactionsProcessor;
   private final ConstraintsProcessor constraintsProcessor;
+  private final NeoJoinChecker neoJoinChecker;
   private final ViewDefinitionProcessor viewDefinitionProcessor;
   private final ProjectGenerator projectGenerator;
   private final MavenBuildRunner mavenBuildRunner;
@@ -132,6 +134,8 @@ public class VsumProjectBuildService {
         reactionsProcessor.process(request.reactions(), metamodels, projectRoot);
     List<String> constraintResources =
         constraintsProcessor.process(request.constraints(), projectRoot);
+    // NeoJoin parses and validates the views; the processor then derives the generated names
+    neoJoinChecker.check(request.viewDefinitions(), metamodels);
     List<GeneratedViewType> viewTypes =
         viewDefinitionProcessor.process(request.viewDefinitions(), metamodels, projectRoot);
     projectGenerator.generate(

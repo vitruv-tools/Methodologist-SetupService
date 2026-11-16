@@ -128,8 +128,9 @@ Genmodels are not uploaded; they are generated from the metamodels. The pipeline
    matching genmodels.
 3. Checks the reactions against the loaded metamodels: every `import` refers to an uploaded nsURI, and
    aliases, classes, and trigger features exist and fit (see [Checks before the build](#checks-before-the-build)).
-4. Checks the view definitions: each declares `export <name> to "<nsURI>"`, imports only uploaded nsURIs,
-   and its file name, export, and nsURI are unique and do not clash with the metamodels.
+4. Checks the view definitions with NeoJoin against the loaded metamodels (syntax, imports, types, unique
+   exports and nsURIs), and that the view type names derived from the file names are unique and do not
+   clash with the metamodels.
 5. Generates a project following the [Methodologist Template](https://github.com/vitruv-tools/Methodologist-Template)
    (`model`, `consistency`, `vsum`, and `viewtype` if there are view definitions), with a smoke test that
    creates and reloads the VSUM, compiles the constraints, and creates a view of every NeoJoin view type.

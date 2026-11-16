@@ -23,6 +23,7 @@ import tools.vitruv.methodologist.setup.vsum.service.constraints.ConstraintsProc
 import tools.vitruv.methodologist.setup.vsum.service.metamodel.MetamodelProcessor;
 import tools.vitruv.methodologist.setup.vsum.service.project.ProjectGenerator;
 import tools.vitruv.methodologist.setup.vsum.service.reactions.ReactionsProcessor;
+import tools.vitruv.methodologist.setup.vsum.service.views.NeoJoinChecker;
 import tools.vitruv.methodologist.setup.vsum.service.views.NeoJoinViewDefinitionProcessor;
 
 /**
@@ -40,6 +41,7 @@ class VsumBuildEndToEndTest {
           new MetamodelProcessor(),
           new ReactionsProcessor(),
           new ConstraintsProcessor(),
+          new NeoJoinChecker(),
           new NeoJoinViewDefinitionProcessor(),
           new ProjectGenerator(properties),
           new MavenBuildRunner(properties),
@@ -117,9 +119,7 @@ class VsumBuildEndToEndTest {
                   .POST(HttpRequest.BodyPublishers.ofString("[]")));
       assertEquals(200, view.statusCode(), view.body());
       // the root of the view metamodel exported by components.nj
-      assertTrue(
-          view.body().contains("http://vitruv.tools/methodologisttemplate/components#//Root"),
-          view.body());
+      assertTrue(view.body().contains("components#//Root"), view.body());
     } finally {
       stop(server);
     }

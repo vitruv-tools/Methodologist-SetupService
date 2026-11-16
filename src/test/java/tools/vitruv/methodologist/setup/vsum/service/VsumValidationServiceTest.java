@@ -37,6 +37,7 @@ import tools.vitruv.methodologist.setup.vsum.service.problem.BuildProblem.Source
 import tools.vitruv.methodologist.setup.vsum.service.problem.VsumBuildException;
 import tools.vitruv.methodologist.setup.vsum.service.project.ProjectGenerator;
 import tools.vitruv.methodologist.setup.vsum.service.reactions.ReactionsProcessor;
+import tools.vitruv.methodologist.setup.vsum.service.views.NeoJoinChecker;
 import tools.vitruv.methodologist.setup.vsum.service.views.NeoJoinViewDefinitionProcessor;
 
 class VsumValidationServiceTest {
@@ -51,7 +52,10 @@ class VsumValidationServiceTest {
   private final VsumBuildProperties properties = new VsumBuildProperties();
   private final VsumValidationService service =
       new VsumValidationService(
-          new MetamodelProcessor(), new ReactionsProcessor(), new NeoJoinViewDefinitionProcessor());
+          new MetamodelProcessor(),
+          new ReactionsProcessor(),
+          new NeoJoinChecker(),
+          new NeoJoinViewDefinitionProcessor());
 
   @TempDir Path temporaryDirectory;
 
@@ -104,6 +108,26 @@ class VsumValidationServiceTest {
   }
 
   @Test
+  void reportsTheViewProblemsTheBuildReportsBeforeMaven() {
+    String view =
+        fixture("components.nj").text().replace("supportedProtocols.size", "supportedProtocolz");
+    VsumBuildRequest request =
+        new VsumBuildRequest(
+            List.of(fixture("model.ecore"), fixture("model2.ecore")),
+            List.of(fixture("templateReactions.reactions")),
+            List.of(),
+            List.of(text("components.nj", view)));
+
+    VsumValidationResult result = service.validate(request);
+
+    assertFalse(result.valid());
+    assertEquals(Source.VIEWS, result.problems().get(0).source());
+    assertEquals("components.nj", result.problems().get(0).file());
+    assertTrue(result.problems().get(0).message().contains("supportedProtocolz"));
+    assertEquals(problemsOfTheBuild(request), result);
+  }
+
+  @Test
   void leavesNoFilesBehind() throws IOException {
     Set<Path> before = buildWorkspaces();
 
@@ -133,6 +157,7 @@ class VsumValidationServiceTest {
             new MetamodelProcessor(),
             new ReactionsProcessor(),
             new ConstraintsProcessor(),
+            new NeoJoinChecker(),
             new NeoJoinViewDefinitionProcessor(),
             new ProjectGenerator(buildProperties),
             new MavenBuildRunner(buildProperties),
@@ -170,6 +195,7 @@ class VsumValidationServiceTest {
             new MetamodelProcessor(),
             new ReactionsProcessor(),
             new ConstraintsProcessor(),
+            new NeoJoinChecker(),
             new NeoJoinViewDefinitionProcessor(),
             new ProjectGenerator(properties),
             mavenBuildRunner,
