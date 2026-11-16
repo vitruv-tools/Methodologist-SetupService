@@ -26,9 +26,9 @@ import tools.vitruv.methodologist.setup.vsum.service.reactions.ReactionsProcesso
 import tools.vitruv.methodologist.setup.vsum.service.views.NeoJoinViewDefinitionProcessor;
 
 /**
- * Builds a VSUM with constraints, starts it and checks that its Vitruv server lists and validates
- * the uploaded constraints. Runs the real Maven build and needs port 8080, so it only runs with
- * {@code -Dvsum.integration=true}.
+ * Builds VSUMs, starts them and checks that their Vitruv server serves the uploaded constraints and
+ * views. Runs the real Maven build and needs port 8080, so it only runs with {@code
+ * -Dvsum.integration=true}.
  */
 @EnabledIfSystemProperty(named = "vsum.integration", matches = "true")
 class VsumBuildEndToEndTest {
@@ -57,13 +57,7 @@ class VsumBuildEndToEndTest {
                 List.of(fixture("constraints.ocl")),
                 List.of()));
 
-    Path jarFile = Files.write(runDirectory.resolve("vsum.jar"), jar);
-    Process server =
-        new ProcessBuilder("java", "-jar", jarFile.toString())
-            .directory(runDirectory.toFile())
-            .redirectErrorStream(true)
-            .redirectOutput(runDirectory.resolve("server.log").toFile())
-            .start();
+    Process server = start(jar);
     try {
       HttpClient http = HttpClient.newHttpClient();
       awaitHealthy(http, server);
@@ -83,10 +77,67 @@ class VsumBuildEndToEndTest {
       assertEquals(200, validation.statusCode());
       assertTrue(validation.body().contains("\"satisfied\" : true"), validation.body());
     } finally {
-      server.destroy();
-      if (!server.waitFor(10, TimeUnit.SECONDS)) {
-        server.destroyForcibly();
-      }
+      stop(server);
+    }
+  }
+
+  @Test
+  void builtVsumServesTheUploadedViews() throws Exception {
+    byte[] jar =
+        service.buildProjectJar(
+            new VsumBuildRequest(
+                List.of(fixture("model.ecore"), fixture("model2.ecore")),
+                List.of(),
+                List.of(),
+                List.of(fixture("components.nj"))));
+
+    Process server = start(jar);
+    try {
+      HttpClient http = HttpClient.newHttpClient();
+      awaitHealthy(http, server);
+
+      // the view type generated from components.nj is offered next to the identity view types
+      HttpResponse<String> viewTypes = send(http, request("/vsum/view/types").GET());
+      assertEquals(200, viewTypes.statusCode());
+      assertTrue(viewTypes.body().contains("\"Components\""), viewTypes.body());
+      assertTrue(viewTypes.body().contains("\"model\""), viewTypes.body());
+
+      // a view is fetched in two steps: a selector of the view type, then the view of its selection
+      HttpResponse<String> selector =
+          send(http, request("/vsum/view/selector").header("View-Type", "Components").GET());
+      assertEquals(200, selector.statusCode(), selector.body());
+      String selectorUuid = selector.headers().firstValue("Selector-UUID").orElseThrow();
+
+      HttpResponse<String> view =
+          send(
+              http,
+              request("/vsum/view")
+                  .header("Selector-UUID", selectorUuid)
+                  .header("Content-Type", "application/json")
+                  .POST(HttpRequest.BodyPublishers.ofString("[]")));
+      assertEquals(200, view.statusCode(), view.body());
+      // the root of the view metamodel exported by components.nj
+      assertTrue(
+          view.body().contains("http://vitruv.tools/methodologisttemplate/components#//Root"),
+          view.body());
+    } finally {
+      stop(server);
+    }
+  }
+
+  private Process start(byte[] jar) throws IOException {
+    Path jarFile = Files.write(runDirectory.resolve("vsum.jar"), jar);
+    return new ProcessBuilder("java", "-jar", jarFile.toString())
+        .directory(runDirectory.toFile())
+        .redirectErrorStream(true)
+        .redirectOutput(runDirectory.resolve("server.log").toFile())
+        .start();
+  }
+
+  private static void stop(Process server) throws InterruptedException {
+    server.destroy();
+    if (!server.waitFor(10, TimeUnit.SECONDS)) {
+      server.destroyForcibly();
     }
   }
 

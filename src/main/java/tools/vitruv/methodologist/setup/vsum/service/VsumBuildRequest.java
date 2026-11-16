@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Set;
 import org.springframework.web.multipart.MultipartFile;
 import tools.vitruv.methodologist.setup.exception.MethodologistSetupException;
+import tools.vitruv.methodologist.setup.vsum.service.views.GeneratedViewType;
 
 /**
  * Everything a methodologist supplies to build a VSUM.
@@ -28,6 +29,9 @@ public record VsumBuildRequest(
 
   /** File extension of VitruvOCL constraint files. */
   public static final String CONSTRAINTS_EXTENSION = ".ocl";
+
+  /** File extension of NeoJoin view definitions. */
+  public static final String VIEWS_EXTENSION = GeneratedViewType.EXTENSION;
 
   /** Makes the lists immutable and rejects {@code null} lists. */
   public VsumBuildRequest {
@@ -60,7 +64,7 @@ public record VsumBuildRequest(
         read(metamodelFiles, "metamodel", METAMODEL_EXTENSION),
         read(reactionFiles, "reactions", REACTIONS_EXTENSION),
         read(constraintFiles, "constraint", CONSTRAINTS_EXTENSION),
-        read(viewFiles, "view definition", null));
+        read(viewFiles, "view definition", VIEWS_EXTENSION));
   }
 
   private static List<UploadedFile> read(

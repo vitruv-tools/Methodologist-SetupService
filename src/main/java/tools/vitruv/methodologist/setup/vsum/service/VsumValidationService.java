@@ -8,6 +8,7 @@ import tools.vitruv.methodologist.setup.vsum.service.metamodel.GeneratedMetamode
 import tools.vitruv.methodologist.setup.vsum.service.metamodel.MetamodelProcessor;
 import tools.vitruv.methodologist.setup.vsum.service.problem.VsumBuildException;
 import tools.vitruv.methodologist.setup.vsum.service.reactions.ReactionsProcessor;
+import tools.vitruv.methodologist.setup.vsum.service.views.ViewDefinitionProcessor;
 
 /**
  * Checks a VSUM project without building it, so that problems can be shown while it is edited.
@@ -23,10 +24,11 @@ public class VsumValidationService {
 
   private final MetamodelProcessor metamodelProcessor;
   private final ReactionsProcessor reactionsProcessor;
+  private final ViewDefinitionProcessor viewDefinitionProcessor;
 
   /**
    * Checks the project. Like the build, the checks stop at the first stage with problems: reactions
-   * are only checked once the metamodels are valid.
+   * are only checked once the metamodels are valid, and view definitions once the reactions are.
    *
    * @param request the project, as for a build
    * @return the problems the build would report before running Maven
@@ -35,6 +37,7 @@ public class VsumValidationService {
     try {
       List<GeneratedMetamodel> metamodels = metamodelProcessor.check(request.metamodels());
       reactionsProcessor.check(request.reactions(), metamodels);
+      viewDefinitionProcessor.check(request.viewDefinitions(), metamodels);
       return VsumValidationResult.of(List.of());
     } catch (VsumBuildException e) {
       log.debug("VSUM validation found problems: {}", e.getMessage());

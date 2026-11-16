@@ -1,0 +1,9 @@
+export components to "http://vitruv.tools/methodologisttemplate/components"
+
+import "http://vitruv.tools/methodologisttemplate/model"
+
+// shows every Component of the first model as a Thing with its name
+from Component c
+create Thing {
+    c.name
+}

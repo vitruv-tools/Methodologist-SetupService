@@ -90,7 +90,8 @@ public class VsumBuildWarmup implements ApplicationRunner, HealthIndicator {
 
   /**
    * The sample project: the two metamodels, reactions, and constraints of the Methodologist
-   * Template, which together need every dependency a generated project can have.
+   * Template and a NeoJoin view definition, which together need every dependency a generated
+   * project can have.
    *
    * @return the build request of the sample project
    */
@@ -99,7 +100,7 @@ public class VsumBuildWarmup implements ApplicationRunner, HealthIndicator {
         List.of(sample("model.ecore"), sample("model2.ecore")),
         List.of(sample("templateReactions.reactions")),
         List.of(sample("constraints.ocl")),
-        List.of());
+        List.of(sample("components.nj")));
   }
 
   private static UploadedFile sample(String name) {

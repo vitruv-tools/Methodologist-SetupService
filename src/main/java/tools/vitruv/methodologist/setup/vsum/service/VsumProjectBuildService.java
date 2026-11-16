@@ -28,6 +28,7 @@ import tools.vitruv.methodologist.setup.vsum.service.problem.VsumBuildException;
 import tools.vitruv.methodologist.setup.vsum.service.project.ProjectGenerator;
 import tools.vitruv.methodologist.setup.vsum.service.project.ProjectLayout;
 import tools.vitruv.methodologist.setup.vsum.service.reactions.ReactionsProcessor;
+import tools.vitruv.methodologist.setup.vsum.service.views.GeneratedViewType;
 import tools.vitruv.methodologist.setup.vsum.service.views.ViewDefinitionProcessor;
 
 /**
@@ -131,15 +132,18 @@ public class VsumProjectBuildService {
         reactionsProcessor.process(request.reactions(), metamodels, projectRoot);
     List<String> constraintResources =
         constraintsProcessor.process(request.constraints(), projectRoot);
-    viewDefinitionProcessor.process(request.viewDefinitions(), metamodels, projectRoot);
-    projectGenerator.generate(projectRoot, metamodels, specifications, constraintResources);
-    return sources(request, metamodels, constraintResources, projectRoot);
+    List<GeneratedViewType> viewTypes =
+        viewDefinitionProcessor.process(request.viewDefinitions(), metamodels, projectRoot);
+    projectGenerator.generate(
+        projectRoot, metamodels, specifications, constraintResources, viewTypes);
+    return sources(request, metamodels, constraintResources, viewTypes, projectRoot);
   }
 
   private static ProjectSources sources(
       VsumBuildRequest request,
       List<GeneratedMetamodel> metamodels,
       List<String> constraintResources,
+      List<GeneratedViewType> viewTypes,
       Path projectRoot) {
     ProjectSources sources = new ProjectSources(projectRoot);
     // the metamodel processor returns one entry per upload, in upload order
@@ -178,12 +182,16 @@ public class VsumProjectBuildService {
               null);
       sources.addConstraintResource(constraintResources.get(i), file);
     }
-    for (UploadedFile view : request.viewDefinitions()) {
-      sources.add(
-          Source.VIEWS,
-          ProjectLayout.viewsDirectory(projectRoot).resolve(view.fileName()),
-          view,
-          null);
+    // the view definition processor returns one entry per upload, in upload order
+    for (int i = 0; i < viewTypes.size() && i < request.viewDefinitions().size(); i++) {
+      UploadedFile view = request.viewDefinitions().get(i);
+      SourceFile file =
+          sources.add(
+              Source.VIEWS,
+              ProjectLayout.viewsDirectory(projectRoot).resolve(view.fileName()),
+              view,
+              null);
+      sources.addView(viewTypes.get(i).exportName(), viewTypes.get(i).name(), file);
     }
     return sources;
   }

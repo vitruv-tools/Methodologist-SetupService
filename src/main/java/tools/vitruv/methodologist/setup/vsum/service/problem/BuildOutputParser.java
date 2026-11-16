@@ -19,14 +19,15 @@ import tools.vitruv.methodologist.setup.vsum.service.build.MavenBuildFailedExcep
 import tools.vitruv.methodologist.setup.vsum.service.problem.BuildProblem.Source;
 import tools.vitruv.methodologist.setup.vsum.service.problem.ProjectSources.SourceFile;
 import tools.vitruv.methodologist.setup.vsum.service.project.ProjectLayout;
+import tools.vitruv.methodologist.setup.vsum.service.views.GeneratedViewType;
 
 /**
  * Turns the output of a failed Maven build into problems attributed to the uploaded files.
  *
- * <p>Recognizes Reactions compiler (Xtext) errors, javac errors in code generated from the
- * metamodels or reactions, and failures of the generated smoke test; anything else is reported for
- * the module that failed. Errors that only follow from another one are hidden (see {@link
- * FollowUpErrors}).
+ * <p>Recognizes Reactions and NeoJoin compiler (Xtext) errors, javac errors in code generated from
+ * the metamodels, reactions, or view definitions, and failures of the generated smoke test;
+ * anything else is reported for the module that failed. Errors that only follow from another one
+ * are hidden (see {@link FollowUpErrors}).
  */
 @Slf4j
 public final class BuildOutputParser {
@@ -47,6 +48,12 @@ public final class BuildOutputParser {
           "\\bat ("
               + Pattern.quote(ProjectLayout.MODEL_BASE_PACKAGE)
               + "\\.[\\w.$]+)\\.[\\w$]+\\(");
+  private static final Pattern GENERATED_VIEW_CODE = Pattern.compile("/neojoin/viewtypes/([^/]+)/");
+  private static final Pattern VIEW_FRAME =
+      Pattern.compile("\\bat neojoin\\.viewtypes\\.(\\w+)\\.");
+  private static final Pattern NEOJOIN_FRAME = Pattern.compile("\\bat tools\\.vitruv\\.neojoin\\.");
+  private static final Pattern VIEW_TYPE_MESSAGE =
+      Pattern.compile("(?:registers the view type|a view of the view type) (\\w+)");
   private static final Pattern CONSTRAINTS_MESSAGE =
       Pattern.compile("Constraints in (\\S+) cannot be evaluated:\\n", Pattern.DOTALL);
   private static final Pattern INVARIANT = Pattern.compile("\\binv\\s+(\\w+)");
@@ -101,7 +108,8 @@ public final class BuildOutputParser {
     int column = Integer.parseInt(xtext.group(4));
     Optional<SourceFile> file = sources.fileAt(Path.of(xtext.group(2)));
     if (file.isEmpty()) {
-      return BuildProblem.of(Source.REACTIONS, null, message);
+      boolean view = xtext.group(2).endsWith(GeneratedViewType.EXTENSION);
+      return BuildProblem.of(view ? Source.VIEWS : Source.REACTIONS, null, message);
     }
     SourceFile source = file.get();
     int uploadedLine = source.uploadedLine(line);
@@ -146,6 +154,18 @@ public final class BuildOutputParser {
           .withHint(
               "Check the Java expressions in the reactions' update and match blocks, e.g. the"
                   + " types of the values that are assigned or compared");
+    }
+    if (module.equals(ProjectLayout.VIEWTYPE_MODULE)) {
+      Matcher export = GENERATED_VIEW_CODE.matcher(unixPath);
+      Optional<SourceFile> view =
+          export.find() ? sources.viewOf(export.group(1)) : Optional.empty();
+      return BuildProblem.of(
+              Source.VIEWS,
+              view.map(SourceFile::fileName).orElse(null),
+              "the Java code generated from the view definition does not compile: " + message)
+          .withHint(
+              "Check the Java expressions in the view definition, e.g. the types of the values"
+                  + " that are assigned or compared");
     }
     return BuildProblem.of(
         Source.INTERNAL, null, "generated code does not compile: " + relative + ": " + message);
@@ -243,8 +263,9 @@ public final class BuildOutputParser {
   }
 
   /**
-   * Attributes a failure of the smoke test: constraints that cannot be evaluated, or an exception
-   * while creating the VSUM, located by the generated reactions or metamodel code on its stack.
+   * Attributes a failure of the smoke test: constraints that cannot be evaluated, view types that
+   * cannot be created, or an exception while creating the VSUM, located by the generated reactions,
+   * view type, or metamodel code on its stack.
    */
   static List<BuildProblem> smokeTestProblems(
       String type, String message, String stackTrace, ProjectSources sources) {
@@ -269,6 +290,24 @@ public final class BuildOutputParser {
                 Source.REACTIONS, file.get().fileName(), file.get().text(), line, null, text));
       }
       return List.of(BuildProblem.of(Source.REACTIONS, null, text));
+    }
+
+    Matcher viewFrame = VIEW_FRAME.matcher(stackTrace);
+    Matcher viewTypeMessage = VIEW_TYPE_MESSAGE.matcher(message);
+    boolean inGeneratedViewType = viewFrame.find();
+    boolean aboutViewType = viewTypeMessage.find();
+    if (inGeneratedViewType || aboutViewType || NEOJOIN_FRAME.matcher(stackTrace).find()) {
+      Optional<SourceFile> file = Optional.empty();
+      if (inGeneratedViewType) {
+        file = sources.viewOf(viewFrame.group(1));
+      } else if (aboutViewType) {
+        file = sources.viewNamed(viewTypeMessage.group(1));
+      }
+      return List.of(
+          BuildProblem.of(
+              Source.VIEWS,
+              file.map(SourceFile::fileName).orElse(null),
+              "creating the views failed: " + exception));
     }
 
     Matcher modelFrame = MODEL_FRAME.matcher(stackTrace);
@@ -399,6 +438,9 @@ public final class BuildOutputParser {
         }
         if (module.equals(ProjectLayout.CONSISTENCY_ARTIFACT_ID)) {
           return Source.REACTIONS;
+        }
+        if (module.equals(ProjectLayout.VIEWTYPE_ARTIFACT_ID)) {
+          return Source.VIEWS;
         }
         return Source.INTERNAL;
       }

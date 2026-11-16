@@ -34,6 +34,7 @@ class VsumBuildWarmupTest {
         sample.metamodels().stream().map(UploadedFile::fileName).toList());
     assertEquals(1, sample.reactions().size());
     assertEquals(1, sample.constraints().size(), "constraints pull in VitruvOCL");
+    assertEquals(1, sample.viewDefinitions().size(), "views pull in NeoJoin");
     assertTrue(sample.metamodels().stream().allMatch(file -> file.content().length > 0));
   }
 

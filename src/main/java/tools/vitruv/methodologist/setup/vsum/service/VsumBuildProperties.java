@@ -98,6 +98,14 @@ public class VsumBuildProperties {
    */
   private String vitruvoclVersion = "0.1.0-SNAPSHOT";
 
+  /**
+   * Version of NeoJoin for Vitruvius ({@code tools.vitruv:tools.vitruv.neojoin.vitruv.*}), which
+   * generates the view types of the view definitions. It has no release yet; pin a timestamped
+   * snapshot once one is published, so that builds do not change whenever a new snapshot is
+   * published.
+   */
+  private String neojoinVitruvVersion = "0.1.0-SNAPSHOT";
+
   /** Version of {@code org.eclipse.emf.common}. */
   private String emfCommonVersion = "2.46.0";
 

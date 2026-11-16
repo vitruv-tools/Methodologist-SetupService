@@ -20,6 +20,8 @@ public final class ProjectSources {
   private final Map<String, SourceFile> reactionsBySegment = new HashMap<>();
   private final Map<String, SourceFile> metamodelsByJavaPackage = new LinkedHashMap<>();
   private final Map<String, SourceFile> constraintsByResource = new HashMap<>();
+  private final Map<String, SourceFile> viewsByExport = new HashMap<>();
+  private final Map<String, SourceFile> viewsByName = new HashMap<>();
 
   /**
    * Creates an empty mapping.
@@ -102,6 +104,19 @@ public final class ProjectSources {
   }
 
   /**
+   * Records the view definition of a view type.
+   *
+   * @param exportName the exported package, into which NeoJoin generates the view type, e.g. {@code
+   *     components} for the generated package {@code neojoin.viewtypes.components}
+   * @param viewTypeName the name of the view type
+   * @param file the view definition
+   */
+  public void addView(String exportName, String viewTypeName, SourceFile file) {
+    viewsByExport.put(exportName, file);
+    viewsByName.put(viewTypeName, file);
+  }
+
+  /**
    * Returns the root of the generated project.
    *
    * @return the absolute project root
@@ -155,6 +170,26 @@ public final class ProjectSources {
    */
   public Optional<SourceFile> constraintsOf(String resource) {
     return Optional.ofNullable(constraintsByResource.get(resource));
+  }
+
+  /**
+   * Returns the view definition that exports a package.
+   *
+   * @param exportName the exported package
+   * @return the view definition, if known
+   */
+  public Optional<SourceFile> viewOf(String exportName) {
+    return Optional.ofNullable(viewsByExport.get(exportName));
+  }
+
+  /**
+   * Returns the view definition of a view type.
+   *
+   * @param viewTypeName the name of the view type
+   * @return the view definition, if known
+   */
+  public Optional<SourceFile> viewNamed(String viewTypeName) {
+    return Optional.ofNullable(viewsByName.get(viewTypeName));
   }
 
   /**

@@ -31,6 +31,12 @@ public final class ProjectLayout {
   /** Artifact id of the VSUM module. */
   public static final String VSUM_ARTIFACT_ID = ROOT_ARTIFACT_ID + ".vsum";
 
+  /**
+   * Artifact id of the view type module, which is only generated if NeoJoin view definitions are
+   * uploaded. It is also the Eclipse project name its MWE2 workflow resolves against.
+   */
+  public static final String VIEWTYPE_ARTIFACT_ID = ROOT_ARTIFACT_ID + ".viewtype";
+
   /** Base package under which EMF generates the metamodel code. */
   public static final String MODEL_BASE_PACKAGE = MODEL_ARTIFACT_ID;
 
@@ -59,6 +65,15 @@ public final class ProjectLayout {
 
   /** Directory of the consistency module. */
   public static final String CONSISTENCY_MODULE = "consistency";
+
+  /** Directory of the view type module. */
+  public static final String VIEWTYPE_MODULE = "viewtype";
+
+  /**
+   * Directory receiving the view types, metamodels, and genmodels NeoJoin generates from the view
+   * definitions, relative to the view type module.
+   */
+  public static final String GENERATED_NEOJOIN_SOURCES = "target/generated-sources/neojoin";
 
   private ProjectLayout() {
     throw new UnsupportedOperationException("This is a utility class and cannot be instantiated");
@@ -120,13 +135,24 @@ public final class ProjectLayout {
   }
 
   /**
-   * Returns the directory holding view definitions.
+   * Returns the view type module directory.
+   *
+   * @param root project root
+   * @return the view type module directory
+   */
+  public static Path viewtypeModule(Path root) {
+    return root.resolve(VIEWTYPE_MODULE);
+  }
+
+  /**
+   * Returns the directory holding the NeoJoin view definitions. The view type module compiles each
+   * of them into a view type.
    *
    * @param root project root
    * @return the view definitions directory
    */
   public static Path viewsDirectory(Path root) {
-    return root.resolve("views/src/main/neojoin");
+    return viewtypeModule(root).resolve("src/main/neojoin");
   }
 
   /**

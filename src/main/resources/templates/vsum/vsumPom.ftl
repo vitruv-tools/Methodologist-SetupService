@@ -57,6 +57,14 @@
             <artifactId>[=consistencyArtifactId]</artifactId>
             <version>${project.version}</version>
         </dependency>
+<#if viewTypes?has_content>
+        <!-- view types generated from the NeoJoin view definitions -->
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>[=viewtypeArtifactId]</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+</#if>
 <#if constraintResources?has_content>
 
         <!-- VitruvOCL: cross-model constraint language and evaluator -->

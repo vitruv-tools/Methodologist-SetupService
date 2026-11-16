@@ -12,9 +12,11 @@ RUN mvn --batch-mode --no-transfer-progress -DskipTests package \
 FROM ${MAVEN_IMAGE}
 COPY --from=build /workspace/app.jar /app/app.jar
 
-# Fill the Maven repository of the VSUM builds by building a sample project once. The image then
-# contains every dependency of the generated projects, and builds run offline: they do not depend
-# on Maven Central being reachable, and the first build after a deployment is as fast as the rest.
+# Fill the Maven repository of the VSUM builds by building a sample project once. The sample has
+# every kind of input (metamodels, reactions, VitruvOCL constraints, a NeoJoin view), so the image
+# then contains every dependency of the generated projects, including the NeoJoin compiler, and
+# builds run offline: they do not depend on Maven Central being reachable, and the first build
+# after a deployment is as fast as the rest.
 # To change versions (setup.vsum.*-version), rebuild the image.
 ENV SETUP_VSUM_MAVEN_REPOSITORY=/opt/vsum-m2
 RUN java -jar /app/app.jar \

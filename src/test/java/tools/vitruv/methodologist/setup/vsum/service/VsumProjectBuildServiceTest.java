@@ -47,7 +47,7 @@ class VsumProjectBuildServiceTest {
           List.of(fixture("model.ecore"), fixture("model2.ecore")),
           List.of(fixture("templateReactions.reactions")),
           List.of(fixture("constraints.ocl")),
-          List.of(text("components.nj", "view stub")));
+          List.of(fixture("components.nj")));
 
   private final VsumBuildProperties properties = new VsumBuildProperties();
   private final VsumProjectBuildService service =
@@ -82,7 +82,7 @@ class VsumProjectBuildServiceTest {
                 + "templateReactions.reactions",
             "consistency/src/main/constraints/tools/vitruv/methodologisttemplate/consistency/"
                 + "constraints.ocl",
-            "views/src/main/neojoin/components.nj",
+            "viewtype/src/main/neojoin/components.nj",
             "vsum/pom.xml",
             "vsum/src/main/java/tools/vitruv/methodologisttemplate/vsum/VSUMExample.java",
             "vsum/src/test/java/tools/vitruv/methodologisttemplate/vsum/VSUMExampleTest.java")) {

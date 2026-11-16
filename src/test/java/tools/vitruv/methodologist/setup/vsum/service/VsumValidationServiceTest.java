@@ -46,11 +46,12 @@ class VsumValidationServiceTest {
           List.of(fixture("model.ecore"), fixture("model2.ecore")),
           List.of(fixture("templateReactions.reactions")),
           List.of(fixture("constraints.ocl")),
-          List.of(text("components.nj", "view stub")));
+          List.of(fixture("components.nj")));
 
   private final VsumBuildProperties properties = new VsumBuildProperties();
   private final VsumValidationService service =
-      new VsumValidationService(new MetamodelProcessor(), new ReactionsProcessor());
+      new VsumValidationService(
+          new MetamodelProcessor(), new ReactionsProcessor(), new NeoJoinViewDefinitionProcessor());
 
   @TempDir Path temporaryDirectory;
 

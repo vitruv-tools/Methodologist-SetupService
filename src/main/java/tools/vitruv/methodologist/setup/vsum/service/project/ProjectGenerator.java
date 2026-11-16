@@ -18,10 +18,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import tools.vitruv.methodologist.setup.vsum.service.VsumBuildProperties;
 import tools.vitruv.methodologist.setup.vsum.service.metamodel.GeneratedMetamodel;
+import tools.vitruv.methodologist.setup.vsum.service.views.GeneratedViewType;
 
 /**
- * Renders the Maven project around the processed metamodels, reactions, and constraints, following
- * the layout of the Methodologist Template.
+ * Renders the Maven project around the processed metamodels, reactions, constraints, and view
+ * definitions, following the layout of the Methodologist Template. The view type module is only
+ * generated if there are view definitions, so projects without views build as before.
  */
 @Service
 @RequiredArgsConstructor
@@ -40,16 +42,18 @@ public class ProjectGenerator {
    * @param changePropagationSpecifications fully qualified names of the reactions' generated change
    *     propagation specifications
    * @param constraintResources classpath resources of the constraint files
+   * @param viewTypes the view types generated from the view definitions
    * @throws IOException when rendering or writing a file fails
    */
   public void generate(
       Path projectRoot,
       List<GeneratedMetamodel> metamodels,
       List<String> changePropagationSpecifications,
-      List<String> constraintResources)
+      List<String> constraintResources,
+      List<GeneratedViewType> viewTypes)
       throws IOException {
     Map<String, Object> model =
-        createModel(metamodels, changePropagationSpecifications, constraintResources);
+        createModel(metamodels, changePropagationSpecifications, constraintResources, viewTypes);
 
     Path modelModule = ProjectLayout.modelModule(projectRoot);
     render("rootPom.ftl", model, projectRoot.resolve("pom.xml"));
@@ -78,6 +82,15 @@ public class ProjectGenerator {
         vsumModule.resolve(
             "src/test/java/" + vsumSources + ProjectLayout.VSUM_MAIN_CLASS + "Test.java"));
 
+    if (!viewTypes.isEmpty()) {
+      Path viewtypeModule = ProjectLayout.viewtypeModule(projectRoot);
+      render("viewtypePom.ftl", model, viewtypeModule.resolve("pom.xml"));
+      render("viewtypeProject.ftl", model, viewtypeModule.resolve(".project"));
+      render("viewtypePluginXml.ftl", model, viewtypeModule.resolve("plugin.xml"));
+      render("viewtypeWorkflow.ftl", model, viewtypeModule.resolve("workflow/generate.mwe2"));
+      Files.createDirectories(ProjectLayout.viewsDirectory(projectRoot));
+    }
+
     Files.createDirectories(ProjectLayout.reactionsDirectory(projectRoot));
     Files.createDirectories(ProjectLayout.constraintsDirectory(projectRoot));
   }
@@ -85,7 +98,8 @@ public class ProjectGenerator {
   private Map<String, Object> createModel(
       List<GeneratedMetamodel> metamodels,
       List<String> changePropagationSpecifications,
-      List<String> constraintResources) {
+      List<String> constraintResources,
+      List<GeneratedViewType> viewTypes) {
     Map<String, Object> model = new HashMap<>();
     model.put("groupId", ProjectLayout.GROUP_ID);
     model.put("rootArtifactId", ProjectLayout.ROOT_ARTIFACT_ID);
@@ -93,6 +107,8 @@ public class ProjectGenerator {
     model.put("modelArtifactId", ProjectLayout.MODEL_ARTIFACT_ID);
     model.put("consistencyArtifactId", ProjectLayout.CONSISTENCY_ARTIFACT_ID);
     model.put("vsumArtifactId", ProjectLayout.VSUM_ARTIFACT_ID);
+    model.put("viewtypeArtifactId", ProjectLayout.VIEWTYPE_ARTIFACT_ID);
+    model.put("generatedNeojoinSources", ProjectLayout.GENERATED_NEOJOIN_SOURCES);
     model.put("vsumPackage", ProjectLayout.VSUM_PACKAGE);
     model.put("vsumMainClass", ProjectLayout.VSUM_MAIN_CLASS);
     model.put("ecoreDirectory", ProjectLayout.ECORE_DIRECTORY);
@@ -104,6 +120,7 @@ public class ProjectGenerator {
     model.put("vitruvDslsVersion", properties.getVitruvDslsVersion());
     model.put("vitruvServerVersion", properties.getVitruvServerVersion());
     model.put("vitruvoclVersion", properties.getVitruvoclVersion());
+    model.put("neojoinVitruvVersion", properties.getNeojoinVitruvVersion());
     model.put("emfCommonVersion", properties.getEmfCommonVersion());
     model.put("emfEcoreVersion", properties.getEmfEcoreVersion());
     model.put("junitVersion", properties.getJunitVersion());
@@ -146,6 +163,20 @@ public class ProjectGenerator {
 
     model.put("changePropagationSpecifications", changePropagationSpecifications);
     model.put("constraintResources", constraintResources);
+    model.put(
+        "viewTypes",
+        viewTypes.stream()
+            .map(
+                viewType ->
+                    Map.of(
+                        "name", viewType.name(),
+                        "fileName", viewType.fileName(),
+                        "exportName", viewType.exportName(),
+                        "nsUri", viewType.nsUri(),
+                        "viewTypeClass", viewType.viewTypeClass(),
+                        "packageInterface", viewType.packageInterface(),
+                        "genmodelPath", viewType.genmodelPath()))
+            .toList());
     return model;
   }
 
