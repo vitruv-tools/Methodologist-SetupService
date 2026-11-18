@@ -84,7 +84,7 @@ class VsumProjectBuildServiceTest {
                 + "templateReactions.reactions",
             "consistency/src/main/constraints/tools/vitruv/methodologisttemplate/consistency/"
                 + "constraints.ocl",
-            "views/src/main/neojoin/components.nj",
+            "viewtype/src/main/neojoin/components.nj",
             "vsum/pom.xml",
             "vsum/src/main/java/tools/vitruv/methodologisttemplate/vsum/VSUMExample.java",
             "vsum/src/test/java/tools/vitruv/methodologisttemplate/vsum/VSUMExampleTest.java")) {

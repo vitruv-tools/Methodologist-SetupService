@@ -70,7 +70,8 @@ public class VsumController {
       @Parameter(description = "VitruvOCL constraint files")
           @RequestPart(value = "constraintFiles", required = false)
           List<MultipartFile> constraintFiles,
-      @Parameter(description = "NeoJoin view definitions (stored, not yet compiled)")
+      @Parameter(
+              description = "NeoJoin view definitions (.nj); each becomes a view type of the VSUM")
           @RequestPart(value = "viewFiles", required = false)
           List<MultipartFile> viewFiles) {
     VsumBuildRequest request =
@@ -113,7 +114,8 @@ public class VsumController {
       @Parameter(description = "VitruvOCL constraint files")
           @RequestPart(value = "constraintFiles", required = false)
           List<MultipartFile> constraintFiles,
-      @Parameter(description = "NeoJoin view definitions (stored, not yet compiled)")
+      @Parameter(
+              description = "NeoJoin view definitions (.nj); each becomes a view type of the VSUM")
           @RequestPart(value = "viewFiles", required = false)
           List<MultipartFile> viewFiles) {
     VsumBuildRequest request =
@@ -159,7 +161,8 @@ public class VsumController {
       @Parameter(description = "VitruvOCL constraint files")
           @RequestPart(value = "constraintFiles", required = false)
           List<MultipartFile> constraintFiles,
-      @Parameter(description = "NeoJoin view definitions")
+      @Parameter(
+              description = "NeoJoin view definitions (.nj); each becomes a view type of the VSUM")
           @RequestPart(value = "viewFiles", required = false)
           List<MultipartFile> viewFiles) {
     VsumBuildRequest request =

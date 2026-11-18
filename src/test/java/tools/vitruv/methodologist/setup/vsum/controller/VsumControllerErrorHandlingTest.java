@@ -33,6 +33,7 @@ import tools.vitruv.methodologist.setup.vsum.service.problem.BuildProblem.Source
 import tools.vitruv.methodologist.setup.vsum.service.problem.VsumBuildException;
 import tools.vitruv.methodologist.setup.vsum.service.reactions.ReactionsProcessor;
 import tools.vitruv.methodologist.setup.vsum.service.views.NeoJoinChecker;
+import tools.vitruv.methodologist.setup.vsum.service.views.NeoJoinViewDefinitionProcessor;
 
 class VsumControllerErrorHandlingTest {
 
@@ -222,7 +223,10 @@ class VsumControllerErrorHandlingTest {
                 new VsumController(
                     buildService,
                     new VsumValidationService(
-                        new MetamodelProcessor(), new ReactionsProcessor(), new NeoJoinChecker())))
+                        new MetamodelProcessor(),
+                        new ReactionsProcessor(),
+                        new NeoJoinChecker(),
+                        new NeoJoinViewDefinitionProcessor())))
             .setControllerAdvice(new GlobalExceptionHandler())
             .build();
     MockMultipartFile metamodel =

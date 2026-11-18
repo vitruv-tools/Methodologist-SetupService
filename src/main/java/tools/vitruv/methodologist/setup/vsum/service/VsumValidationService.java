@@ -12,6 +12,7 @@ import tools.vitruv.methodologist.setup.vsum.service.metamodel.MetamodelProcesso
 import tools.vitruv.methodologist.setup.vsum.service.problem.VsumBuildException;
 import tools.vitruv.methodologist.setup.vsum.service.reactions.ReactionsProcessor;
 import tools.vitruv.methodologist.setup.vsum.service.views.NeoJoinChecker;
+import tools.vitruv.methodologist.setup.vsum.service.views.ViewDefinitionProcessor;
 
 /**
  * Checks a VSUM project without building it, so that problems can be shown while it is edited.
@@ -28,6 +29,7 @@ public class VsumValidationService {
   private final MetamodelProcessor metamodelProcessor;
   private final ReactionsProcessor reactionsProcessor;
   private final NeoJoinChecker neoJoinChecker;
+  private final ViewDefinitionProcessor viewDefinitionProcessor;
 
   /**
    * Checks the project. Like the build, the checks stop at the first stage with problems: reactions
@@ -42,6 +44,7 @@ public class VsumValidationService {
       List<GeneratedMetamodel> metamodels = metamodelProcessor.check(request.metamodels());
       reactionsProcessor.check(request.reactions(), metamodels);
       neoJoinChecker.check(request.viewDefinitions(), metamodels);
+      viewDefinitionProcessor.check(request.viewDefinitions(), metamodels);
       return VsumValidationResult.of(List.of());
     } catch (VsumBuildException e) {
       log.debug("VSUM validation found problems: {}", e.getMessage());

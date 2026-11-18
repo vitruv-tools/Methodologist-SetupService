@@ -29,7 +29,7 @@ public record VsumBuildRequest(
   /** File extension of VitruvOCL constraint files. */
   public static final String CONSTRAINTS_EXTENSION = ".ocl";
 
-  /** File extension of view files. */
+  /** File extension of NeoJoin view definitions. */
   public static final String VIEWS_EXTENSION = ".nj";
 
   /** Makes the lists immutable and rejects {@code null} lists. */

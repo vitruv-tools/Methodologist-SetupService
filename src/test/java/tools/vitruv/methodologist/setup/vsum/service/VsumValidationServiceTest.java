@@ -52,7 +52,10 @@ class VsumValidationServiceTest {
   private final VsumBuildProperties properties = new VsumBuildProperties();
   private final VsumValidationService service =
       new VsumValidationService(
-          new MetamodelProcessor(), new ReactionsProcessor(), new NeoJoinChecker());
+          new MetamodelProcessor(),
+          new ReactionsProcessor(),
+          new NeoJoinChecker(),
+          new NeoJoinViewDefinitionProcessor());
 
   @TempDir Path temporaryDirectory;
 
@@ -121,6 +124,33 @@ class VsumValidationServiceTest {
     assertEquals(Source.VIEWS, result.problems().get(0).source());
     assertEquals("components.nj", result.problems().get(0).file());
     assertTrue(result.problems().get(0).message().contains("supportedProtocolz"));
+    assertEquals(problemsOfTheBuild(request), result);
+  }
+
+  @Test
+  void reportsViewTypeNamesThatClashLikeTheBuild() {
+    // valid NeoJoin, so NeoJoin accepts both; but both files become the view type Components
+    String other =
+        fixture("components.nj")
+            .text()
+            .replace("export components to", "export others to")
+            .replace("/views/components\"", "/views/others\"");
+    VsumBuildRequest request =
+        new VsumBuildRequest(
+            List.of(fixture("model.ecore"), fixture("model2.ecore")),
+            List.of(),
+            List.of(),
+            List.of(fixture("components.nj"), text("components_.nj", other)));
+
+    VsumValidationResult result = service.validate(request);
+
+    assertFalse(result.valid());
+    assertEquals(1, result.problems().size(), result.problems().toString());
+    assertEquals(Source.VIEWS, result.problems().get(0).source());
+    assertEquals("components_.nj", result.problems().get(0).file());
+    assertEquals(
+        "the view type 'Components' is already defined by components.nj",
+        result.problems().get(0).message());
     assertEquals(problemsOfTheBuild(request), result);
   }
 

@@ -38,6 +38,18 @@ class BuildOutputParserTest {
       execute actions in brake
       """;
 
+  private static final String COMPONENTS_VIEW =
+      """
+      export components to "http://example.org/views/components"
+
+      import "http://vitruv.tools/methodologisttemplate/model"
+
+      from Component c
+      create Thing {
+          c.nmae
+      }
+      """;
+
   @Test
   void reportsTheRootCauseOfTheOriginalReportAndHidesItsFollowUpErrors() {
     ProjectSources sources = new ProjectSources(ROOT);
@@ -322,6 +334,161 @@ class BuildOutputParserTest {
         problem.message());
   }
 
+  @Test
+  void attributesNeoJoinCompilerErrorsToTheViewDefinition() {
+    ProjectSources sources = new ProjectSources(ROOT);
+    Path view = ProjectLayout.viewsDirectory(ROOT).resolve("components.nj");
+    sources.add(Source.VIEWS, view, upload("components.nj", COMPONENTS_VIEW), null);
+
+    List<BuildProblem> problems =
+        BuildOutputParser.parse(
+            failed(
+                "[ERROR] ERROR:The method or field nmae is undefined for the type Component (file:"
+                    + view
+                    + " line : 7 column : 7)"),
+            sources);
+
+    BuildProblem problem = problems.get(0);
+    assertEquals(Source.VIEWS, problem.source());
+    assertEquals("components.nj", problem.file());
+    assertEquals(7, problem.line());
+    assertEquals(7, problem.column());
+    assertEquals("    c.nmae\n      ^", problem.excerpt());
+  }
+
+  @Test
+  void attributesXtextErrorsOfUnknownNeoJoinFilesToTheViews() {
+    List<BuildProblem> problems =
+        BuildOutputParser.parse(
+            failed(
+                "[ERROR] ERROR:missing EOF at 'x' (file:/elsewhere/unknown.nj line : 1 column : 1)",
+                "[ERROR] ERROR:x cannot be resolved. (file:/elsewhere/unknown.reactions line : 1"
+                    + " column : 1)"),
+            new ProjectSources(ROOT));
+
+    assertEquals(
+        List.of(Source.REACTIONS, Source.VIEWS),
+        problems.stream().map(BuildProblem::source).toList());
+    assertNull(problems.get(1).file());
+  }
+
+  @Test
+  void attributesCompileErrorsOfTheGeneratedViewTypeToTheViewDefinition() {
+    ProjectSources sources = new ProjectSources(ROOT);
+    SourceFile file = addView(sources, ROOT, "my-entities.nj", "entities", "MyEntities");
+    Path generated =
+        ProjectLayout.viewtypeModule(ROOT)
+            .resolve(
+                "target/generated-sources/neojoin/neojoin/viewtypes/entities"
+                    + "/MyEntitiesViewTypeExpressions.java");
+
+    List<BuildProblem> problems =
+        BuildOutputParser.parse(
+            failed("[ERROR] " + generated + ":[12,20] incompatible types: int cannot be converted"),
+            sources);
+
+    BuildProblem problem = problems.get(0);
+    assertEquals(Source.VIEWS, problem.source());
+    assertEquals(file.fileName(), problem.file());
+    assertTrue(
+        problem.message().startsWith("the Java code generated from the view definition"),
+        problem.message());
+    assertFalse(problem.message().contains("/tmp/"), problem.message());
+    assertTrue(problem.hint().contains("Java expressions in the view definition"), problem.hint());
+  }
+
+  @Test
+  void attributesCompileErrorsOfAnUnknownViewTypeToTheViews() {
+    // EMF code of a view metamodel whose export is not known
+    Path generated =
+        ProjectLayout.viewtypeModule(ROOT)
+            .resolve("target/generated-sources/ecore/neojoin/viewtypes/other/impl/RootImpl.java");
+
+    List<BuildProblem> problems =
+        BuildOutputParser.parse(
+            failed("[ERROR] " + generated + ":[3,1] cannot find symbol"), new ProjectSources(ROOT));
+
+    assertEquals(Source.VIEWS, problems.get(0).source());
+    assertNull(problems.get(0).file());
+  }
+
+  @Test
+  void fallsBackToTheViewsWhenTheViewTypeModuleFailed() {
+    List<BuildProblem> problems =
+        BuildOutputParser.parse(
+            failed(
+                "[ERROR] Failed to execute goal org.eclipse.xtext:xtext-maven-plugin:2.43.0"
+                    + ":generate (default) on project tools.vitruv.methodologisttemplate.viewtype:"
+                    + " Execution failed"),
+            new ProjectSources(ROOT));
+
+    assertEquals(List.of(Source.VIEWS), problems.stream().map(BuildProblem::source).toList());
+  }
+
+  @Test
+  void attributesExceptionsInAGeneratedViewTypeToItsViewDefinition(@TempDir Path root)
+      throws IOException {
+    ProjectSources sources = new ProjectSources(root);
+    addView(sources, root, "my-entities.nj", "entities", "MyEntities");
+    writeReport(
+        root,
+        "viewTypesCanBeCreated",
+        "java.lang.NullPointerException",
+        "name is null",
+        "java.lang.NullPointerException: name is null\n"
+            + "\tat neojoin.viewtypes.entities.MyEntitiesViewTypeExpressions.expression1"
+            + "(MyEntitiesViewTypeExpressions.java:20)\n"
+            + "\tat tools.vitruv.neojoin.vitruv.views.operations.Project.apply(Project.java:7)\n");
+
+    List<BuildProblem> problems =
+        BuildOutputParser.parse(failed("[ERROR] Tests run: 1, Errors: 1"), sources);
+
+    BuildProblem problem = problems.get(0);
+    assertEquals(Source.VIEWS, problem.source());
+    assertEquals("my-entities.nj", problem.file());
+    assertEquals(
+        "creating the views failed: NullPointerException: name is null", problem.message());
+  }
+
+  @Test
+  void attributesAViewTypeMissingFromTheVsumToItsViewDefinition(@TempDir Path root)
+      throws IOException {
+    ProjectSources sources = new ProjectSources(root);
+    addView(sources, root, "my-entities.nj", "entities", "MyEntities");
+    writeReport(
+        root,
+        "viewTypesCanBeCreated",
+        "org.opentest4j.AssertionFailedError",
+        "the VSUM registers the view type MyEntities ==> expected: not &lt;null&gt;",
+        "org.opentest4j.AssertionFailedError: the VSUM registers the view type MyEntities\n"
+            + "\tat tools.vitruv.methodologisttemplate.vsum.VSUMExampleTest"
+            + ".viewTypesCanBeCreated(VSUMExampleTest.java:40)\n");
+
+    List<BuildProblem> problems =
+        BuildOutputParser.parse(failed("[ERROR] Tests run: 1, Failures: 1"), sources);
+
+    assertEquals(Source.VIEWS, problems.get(0).source());
+    assertEquals("my-entities.nj", problems.get(0).file());
+  }
+
+  @Test
+  void attributesExceptionsInTheNeoJoinRuntimeToTheViews(@TempDir Path root) throws IOException {
+    writeReport(
+        root,
+        "viewTypesCanBeCreated",
+        "java.lang.IllegalStateException",
+        "no root",
+        "java.lang.IllegalStateException: no root\n"
+            + "\tat tools.vitruv.neojoin.vitruv.views.ViewTypeImpl.createView(ViewTypeImpl.java:9)\n");
+
+    List<BuildProblem> problems =
+        BuildOutputParser.parse(
+            failed("[ERROR] Tests run: 1, Errors: 1"), new ProjectSources(root));
+
+    assertEquals(Source.VIEWS, problems.get(0).source());
+    assertNull(problems.get(0).file(), "the runtime frames do not name the view");
+  }
+
   private static MavenBuildFailedException failed(String... output) {
     return new MavenBuildFailedException(
         VsumErrorCodes.BUILD_FAILED,
@@ -329,6 +496,18 @@ class BuildOutputParserTest {
         List.of(output),
         String.join("\n", output),
         HttpStatus.UNPROCESSABLE_CONTENT);
+  }
+
+  private static SourceFile addView(
+      ProjectSources sources, Path root, String fileName, String exportName, String name) {
+    SourceFile file =
+        sources.add(
+            Source.VIEWS,
+            ProjectLayout.viewsDirectory(root).resolve(fileName),
+            upload(fileName, COMPONENTS_VIEW),
+            null);
+    sources.addView(exportName, name, file);
+    return file;
   }
 
   private static UploadedFile upload(String name, String text) {

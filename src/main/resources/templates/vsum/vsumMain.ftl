@@ -48,6 +48,10 @@ public class [=vsumMainClass] {
   /** Storage folder of the VSUM. */
   static final Path STORAGE_FOLDER = Path.of("vsumexample").toAbsolutePath();
 
+  /** Names of the view types generated from the NeoJoin view definitions of this VSUM. */
+  static final List<String> NEOJOIN_VIEW_TYPES = List.of(<#list viewTypes as viewType>
+      [=viewType.viewTypeClass].NAME<#sep>,</#sep></#list>);
+
   /** Classpath resources containing the VitruvOCL constraints of this VSUM. */
   static final List<String> CONSTRAINT_RESOURCES = List.of(<#list constraintResources as resource>
       "[=resource]"<#sep>,</#sep></#list>);
@@ -96,6 +100,10 @@ public class [=vsumMainClass] {
                 new TestUserInteraction.ResultProvider(new TestUserInteraction()))
             .withChangePropagationSpecifications(createChangePropagationSpecifications())
             .withViewTypes(createViewTypes())
+<#list viewTypes as viewType>
+            // view type generated from [=viewType.fileName]
+            .withViewType([=viewType.viewTypeClass]::new)
+</#list>
 <#if constraintResources?has_content>
             // the Vitruv server lists, validates and manages the constraints via REST
             .withConstraintChecker(createConstraintChecker())
@@ -135,6 +143,12 @@ public class [=vsumMainClass] {
     return specifications;
   }
 
+  /**
+   * Creates the identity view types of the metamodels. The view types generated from the NeoJoin
+   * view definitions are added separately, because they need the VSUM as their view type provider.
+   *
+   * @return the identity view types
+   */
   static Collection<ViewType<?>> createViewTypes() {
     List<ViewType<?>> viewTypes = new ArrayList<>();
 <#list metamodels as metamodel>

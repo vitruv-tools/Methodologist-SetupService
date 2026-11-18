@@ -25,6 +25,10 @@
     <module>model</module>
     <module>consistency</module>
     <module>vsum</module>
+<#if viewTypes?has_content>
+    <!-- generates the view types of the NeoJoin view definitions -->
+    <module>viewtype</module>
+</#if>
   </modules>
 
   <properties>
@@ -34,6 +38,8 @@
     <vitruv.dsls.version>[=vitruvDslsVersion]</vitruv.dsls.version>
     <vitruv.server.version>[=vitruvServerVersion]</vitruv.server.version>
     <vitruvocl.version>[=vitruvoclVersion]</vitruvocl.version>
+    <!-- NeoJoin for Vitruvius generates view types from NeoJoin view definitions -->
+    <neojoin.vitruv.version>[=neojoinVitruvVersion]</neojoin.vitruv.version>
   </properties>
 
   <dependencyManagement>
@@ -94,6 +100,17 @@
         <groupId>tools.vitruv</groupId>
         <artifactId>tools.vitruv.vitruvocl.language</artifactId>
         <version>${vitruvocl.version}</version>
+      </dependency>
+      <!-- NeoJoin for Vitruvius: runtime of the generated view types -->
+      <dependency>
+        <groupId>tools.vitruv</groupId>
+        <artifactId>tools.vitruv.neojoin.vitruv.views</artifactId>
+        <version>${neojoin.vitruv.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>tools.vitruv</groupId>
+        <artifactId>tools.vitruv.neojoin.vitruv.change</artifactId>
+        <version>${neojoin.vitruv.version}</version>
       </dependency>
 
       <!-- external dependencies -->

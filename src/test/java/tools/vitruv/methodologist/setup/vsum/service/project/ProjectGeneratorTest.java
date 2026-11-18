@@ -31,7 +31,8 @@ class ProjectGeneratorTest {
           "tools.vitruv.framework.", "${vitruv.framework.version}",
           "tools.vitruv.dsls.", "${vitruv.dsls.version}",
           "tools.vitruv.server.", "${vitruv.server.version}",
-          "tools.vitruv.vitruvocl.", "${vitruvocl.version}");
+          "tools.vitruv.vitruvocl.", "${vitruvocl.version}",
+          "tools.vitruv.neojoin.vitruv.", "${neojoin.vitruv.version}");
 
   private static final List<GeneratedMetamodel> METAMODELS =
       List.of(
@@ -133,7 +134,8 @@ class ProjectGeneratorTest {
   }
 
   private void generate(VsumBuildProperties properties) throws IOException {
-    new ProjectGenerator(properties).generate(projectRoot, METAMODELS, List.of(), List.of());
+    new ProjectGenerator(properties)
+        .generate(projectRoot, METAMODELS, List.of(), List.of(), List.of());
   }
 
   private static Document parse(Path file) throws Exception {

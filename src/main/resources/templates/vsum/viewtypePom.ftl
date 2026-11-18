@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>[=groupId]</groupId>
+    <artifactId>[=rootArtifactId]</artifactId>
+    <version>[=version]</version>
+  </parent>
+
+  <artifactId>[=viewtypeArtifactId]</artifactId>
+
+  <name>Viewtype</name>
+  <description>View types generated from the NeoJoin view definitions in src/main/neojoin</description>
+
+  <dependencies>
+    <!-- project dependencies -->
+    <dependency>
+      <groupId>${project.groupId}</groupId>
+      <artifactId>[=modelArtifactId]</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <!-- NeoJoin dependencies: runtime of the generated view types -->
+    <dependency>
+      <groupId>tools.vitruv</groupId>
+      <artifactId>tools.vitruv.neojoin.vitruv.views</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>tools.vitruv</groupId>
+      <artifactId>tools.vitruv.neojoin.vitruv.change</artifactId>
+    </dependency>
+
+    <!-- Vitruvius dependencies -->
+    <dependency>
+      <groupId>tools.vitruv</groupId>
+      <artifactId>tools.vitruv.change.atomic</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>tools.vitruv</groupId>
+      <artifactId>tools.vitruv.change.composite</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>tools.vitruv</groupId>
+      <artifactId>tools.vitruv.framework.views</artifactId>
+    </dependency>
+
+    <!-- external dependencies -->
+    <dependency>
+      <groupId>org.eclipse.emf</groupId>
+      <artifactId>org.eclipse.emf.ecore</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <resources>
+      <!-- the generated view metamodels are loaded from the jar -->
+      <resource>
+        <directory>${project.basedir}/[=generatedNeojoinSources]/ecore</directory>
+        <targetPath>[=generatedNeojoinSources]/ecore</targetPath>
+        <includes>
+          <include>**/*.ecore</include>
+          <include>**/*.genmodel</include>
+        </includes>
+      </resource>
+    </resources>
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>build-helper-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>add-source-neojoin</id>
+            <phase>generate-sources</phase>
+            <goals>
+              <goal>add-source</goal>
+            </goals>
+            <configuration>
+              <sources>
+                <source>${project.basedir}/src/main/neojoin</source>
+                <source>${project.basedir}/[=generatedNeojoinSources]</source>
+              </sources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <!-- generates a view type class and its metamodel for each .nj file in src/main/neojoin;
+           must run before the MWE2 workflow, which generates the code of these metamodels -->
+      <plugin>
+        <groupId>org.eclipse.xtext</groupId>
+        <artifactId>xtext-maven-plugin</artifactId>
+        <configuration>
+          <projectMappings>
+            <projectMapping>
+              <projectName>${project.artifactId}</projectName>
+              <path>${project.basedir}</path>
+            </projectMapping>
+          </projectMappings>
+          <languages>
+            <language>
+              <setup>tools.vitruv.neojoin.vitruv.generator.NeoJoinVitruvBuildSetup</setup>
+              <outputConfigurations>
+                <outputConfiguration>
+                  <outputDirectory>${project.basedir}/[=generatedNeojoinSources]</outputDirectory>
+                </outputConfiguration>
+              </outputConfigurations>
+            </language>
+          </languages>
+        </configuration>
+        <dependencies>
+          <dependency>
+            <groupId>tools.vitruv</groupId>
+            <artifactId>tools.vitruv.neojoin.vitruv.generator</artifactId>
+            <version>${neojoin.vitruv.version}</version>
+          </dependency>
+          <dependency>
+            <groupId>tools.vitruv</groupId>
+            <artifactId>tools.vitruv.neojoin.vitruv.views</artifactId>
+            <version>${neojoin.vitruv.version}</version>
+          </dependency>
+          <dependency>
+            <groupId>tools.vitruv</groupId>
+            <artifactId>tools.vitruv.neojoin.vitruv.change</artifactId>
+            <version>${neojoin.vitruv.version}</version>
+          </dependency>
+          <!-- makes the metamodels resolvable by nsURI for the NeoJoin compiler -->
+          <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>[=modelArtifactId]</artifactId>
+            <version>${project.version}</version>
+          </dependency>
+        </dependencies>
+      </plugin>
+      <!-- runs workflow/generate.mwe2 to generate the code of the view metamodels -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>execute-mwe2-generate</id>
+            <phase>generate-sources</phase>
+          </execution>
+        </executions>
+        <dependencies>
+          <dependency>
+            <groupId>tools.vitruv</groupId>
+            <artifactId>tools.vitruv.neojoin.vitruv.generator</artifactId>
+            <version>${neojoin.vitruv.version}</version>
+          </dependency>
+        </dependencies>
+      </plugin>
+    </plugins>
+  </build>
+</project>

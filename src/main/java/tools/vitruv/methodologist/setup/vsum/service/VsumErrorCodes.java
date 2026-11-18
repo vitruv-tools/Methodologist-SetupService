@@ -12,9 +12,12 @@ public final class VsumErrorCodes {
   /** An uploaded reactions file does not fit the uploaded metamodels. */
   public static final String REACTIONS_ERROR = "VSUM_REACTIONS_ERROR";
 
+  /** An uploaded view definition is invalid or does not fit the uploaded metamodels. */
+  public static final String VIEWS_ERROR = "VSUM_VIEWS_ERROR";
+
   /**
-   * The Maven build rejected the uploaded files: the metamodels, reactions, or constraints do not
-   * compile, or the smoke test failed.
+   * The Maven build rejected the uploaded files: the metamodels, reactions, constraints, or views
+   * do not compile, or the smoke test failed.
    */
   public static final String BUILD_FAILED = "VSUM_BUILD_FAILED";
 
